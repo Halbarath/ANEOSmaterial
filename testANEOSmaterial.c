@@ -10,7 +10,7 @@ int main(int argc, char *argv[])
 	
 	ANEOSMATERIAL *material;
 	
-	material = ANEOSinitMaterial(101, dKpcUnit, dMsolUnit);
+	material = ANEOSinitMaterial(54, dKpcUnit, dMsolUnit);
 	
 	double P = ANEOSPofRhoU(material, 8/material->CodeUnitstoCGSforRho, 1e12/material->CodeUnitstoCGSforU);
 	printf("Pressure %.15e\n", P*material->CodeUnitstoCGSforP);

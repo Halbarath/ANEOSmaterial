@@ -1,6 +1,6 @@
 /*
  * ANEOS material library
- *
+ * ANEOS material model
  *
  */
 
@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-#include <gsl/gsl_poly.h>
 #include "ANEOSmaterial.h"
 
 
@@ -20,8 +19,14 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 	
 	switch(iMat)
 	{
-		case 101:
+		case 52:
+			strcpy(inputfile, "ANEOStable_ice.in");
+			break;
+		case 54:
 			strcpy(inputfile, "ANEOStable_dunite.in");
+			break;
+		case 55:
+			strcpy(inputfile, "ANEOStable_iron.in");
 			break;
 		default:
 			assert(0);

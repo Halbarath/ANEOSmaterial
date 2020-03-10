@@ -1,5 +1,7 @@
 /*
- * The header file for the ANEOS material library
+ * ANEOS material library
+ * Header of ANEOSmaterial.c
+ *
  */
  
 typedef struct ANEOSmaterial

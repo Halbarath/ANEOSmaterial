@@ -1,6 +1,6 @@
 /*
  * ANEOS material library
- *
+ * Writes the binary input file for the ANEOS material model
  *
  */
 
@@ -8,13 +8,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "aneos.h"
+#include <string.h>
 
 int main(int argc, char *argv[])
 {
-	int iMat = 4;
+	if (argc != 3) {
+        fprintf(stderr,"Usage: writeANEOStable <iMat> <outputfile>\n");
+        exit(1);
+    }
 	
-	fprintf(stderr, "Initializing material...\n");
-	char matFilename[256] = "aneos.input";
+	int iMat = atoi(argv[1]);
+	char outputfile[256] = "";
+	strcpy(outputfile, argv[2]);
+	
+	fprintf(stderr, "iMat: %d\n",iMat);
+	fprintf(stderr, "outputfile: %s\n",outputfile);
+	
+	fprintf(stderr, "Read axes file\n");
+		
 	char axesFilename[256] = "axes.in";
 	
 	FILE *fp;
@@ -56,6 +67,8 @@ int main(int argc, char *argv[])
 	
 	fclose(fp);
 	
+	fprintf(stderr, "Initializing material...\n");
+	char matFilename[256] = "aneos.input";
 	initaneos(matFilename);
 	fprintf(stderr, "Material initializing finished...\n");
 	
@@ -76,7 +89,6 @@ int main(int argc, char *argv[])
 		cArray[i] = (double *)malloc(nRho * sizeof(double)); 
 		sArray[i] = (double *)malloc(nRho * sizeof(double)); 
 	}
-	
 	
 	double T;
     double rho;
@@ -106,17 +118,18 @@ int main(int argc, char *argv[])
 			double cStencil[25];
 			double sStencil[25];
 						
-			callaneos_cgs(T, rho, iMat, &pArray[i][j], &uArray[i][j], &sArray[i][j], &cv, &dPdT, &dPdrho, &fkros, &cArray[i][j], &iPhase, &rhoL, &rhoH, &ion);
+			callaneos_cgs(T, rho, iMat, &pArray[i][j], &uArray[i][j], &sArray[i][j], &cv, &dPdT,
+				&dPdrho, &fkros, &cArray[i][j], &iPhase, &rhoL, &rhoH, &ion);
 			
 			TArray[i][j] = T;
 			rhoArray[i][j] = rho;
 		}
 	}
 	fprintf(stderr, "Arrays filled\n");
-	fprintf(stderr, "Material initialized\n");
+	
 	fprintf(stderr, "Write file\n");
 	
-	FILE *file = fopen("ANEOStable_dunite.in", "wb");
+	FILE *file = fopen(outputfile, "wb");
 	
 	fwrite(&nRho, sizeof(nRho), 1, file);
 	fwrite(&nT, sizeof(nT), 1, file);
@@ -146,5 +159,6 @@ int main(int argc, char *argv[])
 	
 	fclose(file);
 	
+	fprintf(stderr, "Finished, exiting\n");
     return 0;
 }
