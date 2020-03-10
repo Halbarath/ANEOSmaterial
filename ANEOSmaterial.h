@@ -15,24 +15,12 @@ typedef struct ANEOSmaterial
 	double CodeUnitstoCGSforC;
 	
 	// interpolation arrays, array of array of pointers
-	double **rhoArray;
-	double **TArray;
+	double *rhoAxis;
+	double *TAxis;
 	double **uArray;
-	double **dudrhoArray;
-	double **dudTArray;
-	double **ddudTdrhoArray;
 	double **pArray;
-	double **dpdrhoArray;
-	double **dpdTArray;
-	double **ddpdTdrhoArray;
 	double **cArray;
-	double **dcdrhoArray;
-	double **dcdTArray;
-	double **ddcdTdrhoArray;
 	double **sArray;
-	double **dsdrhoArray;
-	double **dsdTArray;
-	double **ddsdTdrhoArray;
 } ANEOSMATERIAL;
 
 // Initialization and finalization
@@ -60,17 +48,18 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u);
 
 double ANEOSCofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T);
+
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2);
+
+double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u);
+double ANEOSdPdUofRhoU(ANEOSMATERIAL *material, double rho, double u);
+double ANEOSdUdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u);
 
 // Internal functions
 
-double backwardInterpolateTemperature(double rho, double z, int nT, int nRho, double** rhoArray,
-	double** TArray, double** zArray, double** dudrhoArray, double** dudTArray, double** ddudTdrhoArray);
-double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int nRho, double** rhoArray,
-	double** TArray, double** zArray);
-double backwardInterpolateDensity(double T, double z, int nT, int nRho, double** rhoArray,
-	double** TArray, double** uArray, double** dudrhoArray, double** dudTArray, double** ddudTdrhoArray);
-double interpolateValue(double rho, double T, int nT, int nRho, double** rhoArray,
-	double** TArray, double** zArray, double** dzdrhoArray, double** dzdTArray, double** ddzdTdrhoArray);
-double interpolateValueBilinear(double rho, double T, int nT, int nRho, double** rhoArray,
-	double** TArray, double** zArray);
+double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int nRho, double* rhoAxis,
+	double* TAxis, double** zArray);
+double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, double* rhoAxis,
+	double* TAxis, double** uArray);
+double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* rhoAxis,
+	double* TAxis, double** zArray);

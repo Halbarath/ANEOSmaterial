@@ -10,7 +10,7 @@ int main(int argc, char *argv[])
 	
 	ANEOSMATERIAL *material;
 	
-	material = ANEOSinitMaterial(4, dKpcUnit, dMsolUnit);
+	material = ANEOSinitMaterial(101, dKpcUnit, dMsolUnit);
 	
 	double P = ANEOSPofRhoU(material, 8/material->CodeUnitstoCGSforRho, 1e12/material->CodeUnitstoCGSforU);
 	printf("Pressure %.15e\n", P*material->CodeUnitstoCGSforP);
@@ -34,13 +34,13 @@ int main(int argc, char *argv[])
 	double testU1 = ANEOSUofRhoT(material,8/material->CodeUnitstoCGSforRho,testT);
 	printf("testU %.15e\n", testU*material->CodeUnitstoCGSforU);
 	printf("testT %.15e\n", testT);
-	printf("testU1 %.15e\n", testU1*material->CodeUnitstoCGSforU);
+	printf("testU1 %.15e should be %.15e\n", testU1*material->CodeUnitstoCGSforU, testU*material->CodeUnitstoCGSforU);
 	
 	double testRho = ANEOSRhoofUT(material,testU,273);
-	printf("testRho %.15e\n", testRho*material->CodeUnitstoCGSforRho);
+	printf("testRho %.15e, should be 8\n", testRho*material->CodeUnitstoCGSforRho);
 	
 	double testU2 = ANEOSUofRhoT(material,testRho,273);
-	printf("testU2 %.15e\n", testU2*material->CodeUnitstoCGSforU);
+	printf("testU2 %.15e should be %.15e\n", testU2*material->CodeUnitstoCGSforU, testU*material->CodeUnitstoCGSforU);
 	
 	
 	double peeee = ANEOSPofRhoT(material,8/material->CodeUnitstoCGSforRho,4000);
@@ -48,9 +48,17 @@ int main(int argc, char *argv[])
 	double rhoooo = ANEOSRhoofPU(material,peeee,uuuuu);
 	double Teeee = ANEOSTofPU(material,peeee,uuuuu);
 	
-	printf("rhoooo %.15e\n", rhoooo*material->CodeUnitstoCGSforRho);
-	printf("Teeee %.15e\n", Teeee);
+	printf("rhoooo %.15e, should be 8\n", rhoooo*material->CodeUnitstoCGSforRho);
+	printf("Teeee %.15e, should be 4000\n", Teeee);
 	
+	double dPdRho = ANEOSdPdRhoofRhoU(material, 8/material->CodeUnitstoCGSforRho, 1e12/material->CodeUnitstoCGSforU);
+	printf("dPdRho %.15e\n", dPdRho);
+	
+	double dPdU = ANEOSdPdUofRhoU(material, 8/material->CodeUnitstoCGSforRho, 1e12/material->CodeUnitstoCGSforU);
+	printf("dPdU %.15e\n", dPdU);
+	
+	double dUdRho = ANEOSdUdRhoofRhoU(material, 8/material->CodeUnitstoCGSforRho, 1e12/material->CodeUnitstoCGSforU);
+	printf("dUdRho %.15e\n", dUdRho);
 	
 	ANEOSfinalizeMaterial(material);
 	return 0;

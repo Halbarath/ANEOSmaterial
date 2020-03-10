@@ -21,7 +21,7 @@ default:
 
 all: default
 
-testANEOSmaterial: testANEOSmaterial.o $(objects) $(fortran_objects) $(mylibobjects)
+testANEOSmaterial: testANEOSmaterial.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 	
 writeANEOStable: writeANEOStable.o $(objects) $(fortran_objects) 
@@ -31,4 +31,4 @@ clean:
 	rm -f $(execs) $(objects) $(fortran_objects) $(mylibobjects)
 
 cleanall:
-	rm -f $(execs) aneos.output fort.22 *.txt *.mat *.o *.pdf *.png
+	rm -f $(execs) aneos.output fort.22 *.txt *.mat *.o *.pdf
