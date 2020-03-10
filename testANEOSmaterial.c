@@ -5,8 +5,8 @@
 
 int main(int argc, char *argv[])
 {
-	double dKpcUnit = 2.06701e-13;
-	double dMsolUnit = 4.80438e-08;
+	double dKpcUnit = -1.0; //2.06701e-13;
+	double dMsolUnit = -1.0; //4.80438e-08;
 	
 	ANEOSMATERIAL *material;
 	
@@ -14,6 +14,9 @@ int main(int argc, char *argv[])
 	
 	double P = ANEOSPofRhoU(material, 8/material->CodeUnitstoCGSforRho, 1e12/material->CodeUnitstoCGSforU);
 	printf("Pressure %.15e\n", P*material->CodeUnitstoCGSforP);
+	
+	printf("CodeUnitstoCGSforRho %.15e\n", material->CodeUnitstoCGSforRho);
+	printf("CodeUnitstoCGSforU %.15e\n", material->CodeUnitstoCGSforU);
 	
 	double U = ANEOSUofRhoP(material, 8/material->CodeUnitstoCGSforRho,P);
 	printf("Energy %.15e\n", U*material->CodeUnitstoCGSforU);

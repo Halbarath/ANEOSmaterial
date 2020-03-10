@@ -67,6 +67,8 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 	material->CodeUnitstoCGSforRho = 1;
 	material->CodeUnitstoCGSforC = 1;
 	
+	if (dKpcUnit > 0.0 && dMsolUnit > 0.0)
+	{
     const double MSOLG = 1.99e33;        /* solar mass in grams */
     const double GCGS = 6.67e-8;         /* G in cgs */
     const double KPCCM = 3.085678e21;    /* kiloparsec in centimeters */
@@ -80,6 +82,7 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 	material->CodeUnitstoCGSforP = material->CodeUnitstoCGSforU*material->CodeUnitstoCGSforRho;
 	// unit of c is cm/s
 	material->CodeUnitstoCGSforC = dKpcUnit*KPCCM*sqrt((material->CodeUnitstoCGSforRho*GCGS));
+	}
 
 	fprintf(stderr, "Initializing arrays\n");
 
