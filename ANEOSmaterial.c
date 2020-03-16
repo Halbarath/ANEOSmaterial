@@ -34,6 +34,7 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 
 	fprintf(stderr, "Initializing material...\n");
 	
+	double rho0;
 	int nRho;
 	int nT;
 	
@@ -44,7 +45,11 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 		fprintf(stderr, "Could not open file %s\n", inputfile);
 		assert(0);
 	}
-	
+	if (fread(&rho0, sizeof(rho0), 1, file)==0)
+	{
+		fprintf(stderr, "Failed to read from file %s\n", inputfile);
+		assert(0);
+	}
 	if (fread(&nRho, sizeof(nRho), 1, file)==0)
 	{
 		fprintf(stderr, "Failed to read from file %s\n", inputfile);
@@ -59,6 +64,7 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 	ANEOSMATERIAL *material;
 	material = (ANEOSMATERIAL *) calloc(1, sizeof(ANEOSMATERIAL));
 	material->iMat = iMat;
+	material->rho0 = rho0;
 	material->nRho = nRho;
 	material->nT = nT;
 	
@@ -183,6 +189,11 @@ void ANEOSfinalizeMaterial(ANEOSMATERIAL *material)
 	free(material->cArray);
 	free(material->sArray);
 	free(material);
+}
+
+double ANEOSgetRho0(ANEOSMATERIAL *material)
+{
+	return material->rho0/material->CodeUnitstoCGSforRho;
 }
 
 double ANEOSTofPU(ANEOSMATERIAL *material, double p, double u)

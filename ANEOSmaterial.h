@@ -7,6 +7,7 @@
 typedef struct ANEOSmaterial
 {
 	int iMat; // Material number
+	double rho0; // reference density
 	int nRho; // Number of entries in the interpolation arrays in the rho dimension
 	int nT; // Number of entries in the interpolation arrays in the T dimension
 	
@@ -31,6 +32,8 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit);
 void ANEOSfinalizeMaterial(ANEOSMATERIAL *material);
 
 // Access functions
+
+double ANEOSgetRho0(ANEOSMATERIAL *material);
 
 double ANEOSTofPU(ANEOSMATERIAL *material, double p, double u);
 double ANEOSTofRhoU(ANEOSMATERIAL *material, double rho, double u);

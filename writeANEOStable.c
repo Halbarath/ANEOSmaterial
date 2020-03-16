@@ -21,6 +21,22 @@ int main(int argc, char *argv[])
 	char outputfile[256] = "";
 	strcpy(outputfile, argv[2]);
 	
+	double rho0;
+	
+	switch(iMat)
+	{
+		case 2:
+			rho0 = 1.11;
+			break;
+		case 4:
+			rho0 = 3.32;
+			break;
+		case 5:
+			rho0 = 7.85;
+			break;
+	}
+	
+	
 	fprintf(stderr, "iMat: %d\n",iMat);
 	fprintf(stderr, "outputfile: %s\n",outputfile);
 	
@@ -112,12 +128,7 @@ int main(int argc, char *argv[])
 		{
 			T = TAxis[i];
 			rho = rhoAxis[j];
-			
-			double uStencil[25];
-			double pStencil[25];
-			double cStencil[25];
-			double sStencil[25];
-						
+					
 			callaneos_cgs(T, rho, iMat, &pArray[i][j], &uArray[i][j], &sArray[i][j], &cv, &dPdT,
 				&dPdrho, &fkros, &cArray[i][j], &iPhase, &rhoL, &rhoH, &ion);
 			
@@ -131,6 +142,7 @@ int main(int argc, char *argv[])
 	
 	FILE *file = fopen(outputfile, "wb");
 	
+	fwrite(&rho0, sizeof(rho0), 1, file);
 	fwrite(&nRho, sizeof(nRho), 1, file);
 	fwrite(&nT, sizeof(nT), 1, file);
 	
