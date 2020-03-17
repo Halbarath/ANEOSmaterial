@@ -8,6 +8,11 @@ int main(int argc, char *argv[])
 	double dKpcUnit = -1.0; //2.06701e-13;
 	double dMsolUnit = -1.0; //4.80438e-08;
 	
+	if (ANEOS_VERSION_MAJOR != 1) {
+		fprintf(stderr, "main: ANEOS library has the wrong version (%s)\n", ANEOS_VERSION_TEXT);
+		exit(1);
+	}
+
 	ANEOSMATERIAL *material;
 	
 	material = ANEOSinitMaterial(54, dKpcUnit, dMsolUnit);

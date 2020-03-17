@@ -4,6 +4,11 @@
  *
  */
  
+#define ANEOS_VERSION_TEXT    "1.0.0"
+#define ANEOS_VERSION_MAJOR   1
+#define ANEOS_VERSION_MINOR   0
+#define ANEOS_VERSION_PATCH   0
+
 typedef struct ANEOSmaterial
 {
 	int iMat; // Material number
