@@ -32,7 +32,7 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 			assert(0);
 	}
 
-	fprintf(stderr, "Initializing material...\n");
+	//fprintf(stderr, "Initializing material...\n");
 	
 	double rho0;
 	int nRho;
@@ -90,7 +90,7 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 	material->CodeUnitstoCGSforC = dKpcUnit*KPCCM*sqrt((material->CodeUnitstoCGSforRho*GCGS));
 	}
 
-	fprintf(stderr, "Initializing arrays\n");
+	//fprintf(stderr, "Initializing arrays\n");
 
 	double *rhoAxis = (double *)malloc(sizeof(double)*nT);
 	double *TAxis = (double *)malloc(sizeof(double)*nT);
@@ -114,9 +114,9 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 	material->cArray = cArray;
 	material->sArray = sArray;
 
-	fprintf(stderr, "Initializing arrays finished\n");
+	//fprintf(stderr, "Initializing arrays finished\n");
 	
-	fprintf(stderr, "Filling arrays\n");
+	//fprintf(stderr, "Filling arrays\n");
 
 	if (fread(rhoAxis, sizeof(rhoAxis[0]), nRho, file)==0)
 	{
@@ -167,8 +167,8 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 	}
 	
 	fclose(file);
-	fprintf(stderr, "Arrays filled\n");
-	fprintf(stderr, "Material initialized\n");
+	//fprintf(stderr, "Arrays filled\n");
+	//fprintf(stderr, "Material initialized\n");
 	return material;
 }
 
