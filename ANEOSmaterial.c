@@ -370,7 +370,7 @@ double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double 
 double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
 	// Finite difference for derivative
-	double h = 0.01 * rho;
+	double h = 0.00001 * rho;
 	double dPdRho = (-ANEOSPofRhoU(material, rho - h, u) + ANEOSPofRhoU(material, rho + h, u))/(2*h);
 	return dPdRho;
 }
@@ -378,7 +378,7 @@ double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
 double ANEOSdPdUofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
 	// Finite difference for derivative
-	double h = 0.01 * u;
+	double h = 0.00001 * u;
 	double dPdU=(-ANEOSPofRhoU(material, rho, u - h) + ANEOSPofRhoU(material, rho, u + h))/(2*h);
 	return dPdU;
 }
