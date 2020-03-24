@@ -1,11 +1,9 @@
 objects = aneos.o 
 mylibobjects = ANEOSmaterial.o
 
-defs = -DTILL_OUTPUT_ALL_WARNINGS -DTILL_VERBOSE
-
 fortran_objects = libaneos.o
 
-execs = testANEOSmaterial writeANEOStable
+execs = testANEOSmaterial writeANEOStable writePhase
 
 # GNU Science library (uncomment if not needed)
 GSL_LIB = -lgsl -lgslcblas
@@ -25,6 +23,9 @@ testANEOSmaterial: testANEOSmaterial.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 	
 writeANEOStable: writeANEOStable.o $(objects) $(fortran_objects) 
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+writePhase: writePhase.o $(objects) $(fortran_objects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 clean:
