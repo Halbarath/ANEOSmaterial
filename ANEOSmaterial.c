@@ -209,7 +209,6 @@ double ANEOSTofRhoU(ANEOSMATERIAL *material, double rho, double u)
 	if (T<-1e40)
 	{
 		fprintf(stderr,"ANEOSTofRhoU failed for rho = %.15e, u = %.15e\n", rho, u);
-		T = 1;
 	}
 	return T;
 }
