@@ -11,7 +11,9 @@
 #include <string.h>
 #include "ANEOSmaterial.h"
 
-
+/*
+ * Initializes ANEOSMATERIAL given the material number iMat
+ */
 
 ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 {
@@ -172,7 +174,9 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 	return material;
 }
 
-
+/*
+ * Releases the memory of ANEOSMATERIAL
+ */
 void ANEOSfinalizeMaterial(ANEOSMATERIAL *material)
 {
 	for (int i=0; i<material->nT; i++)
@@ -191,11 +195,17 @@ void ANEOSfinalizeMaterial(ANEOSMATERIAL *material)
 	free(material);
 }
 
+/*
+ * Converts the reference density in cgs to Code Units
+ */
 double ANEOSgetRho0(ANEOSMATERIAL *material)
 {
 	return material->rho0/material->CodeUnitstoCGSforRho;
 }
 
+/*
+ * Calculates the temperature T(p,u)
+ */
 double ANEOSTofPU(ANEOSMATERIAL *material, double p, double u)
 {
 	double rho = ANEOSRhoofPU(material,p,u);
@@ -203,6 +213,9 @@ double ANEOSTofPU(ANEOSMATERIAL *material, double p, double u)
 	return T;
 }
 
+/*
+ * Calculates temperature T(rho,u)
+ */
 double ANEOSTofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
 	double T = backwardInterpolateTemperatureBilinear(rho*material->CodeUnitstoCGSforRho,u*material->CodeUnitstoCGSforU,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->uArray); 
@@ -213,6 +226,9 @@ double ANEOSTofRhoU(ANEOSMATERIAL *material, double rho, double u)
 	return T;
 }
 
+/*
+ * Calculates temperature T(rho,p)
+ */
 double ANEOSTofRhoP(ANEOSMATERIAL *material, double rho, double p)
 {
 	double T = backwardInterpolateTemperatureBilinear(rho*material->CodeUnitstoCGSforRho,p*material->CodeUnitstoCGSforP,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->pArray);
@@ -220,6 +236,9 @@ double ANEOSTofRhoP(ANEOSMATERIAL *material, double rho, double p)
 	return T;
 }
 
+/*
+ * Calculates internal energy u(p,T)
+ */
 double ANEOSUofPT(ANEOSMATERIAL *material, double p, double T)
 {
 	double rho = ANEOSRhoofPT(material,p,T);
@@ -227,6 +246,9 @@ double ANEOSUofPT(ANEOSMATERIAL *material, double p, double T)
 	return u;
 }
 
+/*
+ * Calculates internal energy u(rho,T)
+ */
 double ANEOSUofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
 	double u = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->uArray);
@@ -235,6 +257,9 @@ double ANEOSUofRhoT(ANEOSMATERIAL *material, double rho, double T)
 	return u;
 }
 
+/*
+ * Calculates internal energy u(rho,p)
+ */
 double ANEOSUofRhoP(ANEOSMATERIAL *material, double rho, double p)
 {
 	double T = ANEOSTofRhoP(material,rho,p);
@@ -242,6 +267,9 @@ double ANEOSUofRhoP(ANEOSMATERIAL *material, double rho, double p)
 	return u;
 }
 
+/*
+ * Calculates pressure p(u,T)
+ */
 double ANEOSPofUT(ANEOSMATERIAL *material, double u, double T)
 {
 	double rho = ANEOSRhoofUT(material,u,T);
@@ -249,6 +277,9 @@ double ANEOSPofUT(ANEOSMATERIAL *material, double u, double T)
 	return p;
 }
 
+/*
+ * Calculates pressure p(rho,T)
+ */
 double ANEOSPofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
 	double p = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->pArray);
@@ -257,6 +288,9 @@ double ANEOSPofRhoT(ANEOSMATERIAL *material, double rho, double T)
 	return p;
 }
 
+/*
+ * Calculates pressure p(rho,u)
+ */
 double ANEOSPofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
 	double T = ANEOSTofRhoU(material,rho,u);
@@ -264,6 +298,9 @@ double ANEOSPofRhoU(ANEOSMATERIAL *material, double rho, double u)
 	return p;
 }
 
+/*
+ * Calculates density rho(u,T)
+ */
 double ANEOSRhoofUT(ANEOSMATERIAL *material, double u, double T)
 {
 	double rho = backwardInterpolateDensityBilinear(T,u*material->CodeUnitstoCGSforU,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->uArray);
@@ -272,6 +309,9 @@ double ANEOSRhoofUT(ANEOSMATERIAL *material, double u, double T)
 	return rho;
 }
 
+/*
+ * Calculates density rho(p,T)
+ */
 double ANEOSRhoofPT(ANEOSMATERIAL *material, double p, double T)
 {
 	double rho = backwardInterpolateDensityBilinear(T,p*material->CodeUnitstoCGSforP,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->pArray);
@@ -280,6 +320,9 @@ double ANEOSRhoofPT(ANEOSMATERIAL *material, double p, double T)
 	return rho;
 }
 
+/*
+ * Calculates density rho(p,u)
+ */
 double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 {
 	double *Tdifference = (double *)malloc((material->nRho) * sizeof(double));
@@ -338,23 +381,30 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 	return rho;
 }
 
+/*
+ * Calculates the sound speed c(rho,u)
+ */
 double ANEOSCofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
 	double T = ANEOSTofRhoU(material,rho,u);
-	double c = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->cArray);
-	if (c<-1e40){fprintf(stderr,"ANEOSCofRhoU failed for rho = %.15e, u = %.15e\n", rho, u);}
-	c /= material->CodeUnitstoCGSforC;
+	double c = ANEOSCofRhoT(material,rho,T);
 	return c;
 }
 
+/*
+ * Calculates the sound speed c(rho,T)
+ */
 double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
 	double c = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->cArray);
-	if (c<-1e40){fprintf(stderr,"ANEOSCofRhoU failed for rho = %.15e, T = %.15e\n", rho, T);}
+	if (c<-1e40){fprintf(stderr,"ANEOSCofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);}
 	c /= material->CodeUnitstoCGSforC;
 	return c;
 }
 
+/*
+ * Calculates the isentropic evolution u2(rho1,u1,rho2)
+ */
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2)
 {
 	double oldT = ANEOSTofRhoU(material,rho1,u1);
@@ -366,6 +416,9 @@ double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double 
 	return newu;
 }
 
+/*
+ * Calculates derivative dPdRho(rho,u)
+ */
 double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
 	// Finite difference for derivative
@@ -374,6 +427,9 @@ double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
 	return dPdRho;
 }
 
+/*
+ * Calculates derivative dPdU(rho,u)
+ */
 double ANEOSdPdUofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
 	// Finite difference for derivative
@@ -382,12 +438,18 @@ double ANEOSdPdUofRhoU(ANEOSMATERIAL *material, double rho, double u)
 	return dPdU;
 }
 
+/*
+ * Calculates derivative dUdRho(rho,u)
+ */
 double ANEOSdUdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
 	double dUdRho = ANEOSPofRhoU(material, rho, u)/(rho*rho);
 	return dUdRho;
 }
 
+/*
+ * Internal function to backward interpolate the temperature using bilinear interpolation
+ */
 double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int nRho, double* rhoAxis,
 	double* TAxis, double** zArray)
 	{
@@ -448,7 +510,10 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 		free(indices);
 		return T;
 	}
-	
+
+/*
+ * Internal function to backward interpolate the density using bilinear interpolation
+ */
 double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, double* rhoAxis,
 	double* TAxis, double** zArray)
 	{
@@ -508,7 +573,10 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 		free(indices);
 		return rho;
 	}
-	
+
+/*
+ * Internal function to interpolate a value using bilinear interpolation
+ */
 double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* rhoAxis,
 	double* TAxis, double** zArray)
 	{
