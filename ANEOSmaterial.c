@@ -14,7 +14,6 @@
 /*
  * Initializes ANEOSMATERIAL given the material number iMat
  */
-
 ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 {
 	char inputfile[256];
@@ -453,7 +452,7 @@ double ANEOSdUdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
 double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int nRho, double* rhoAxis,
 	double* TAxis, double** zArray)
 	{
-		
+		// searching the rho interval containing the rho value
 		int i=0;
 		for (int k=0; k<nRho; k++)
 		{
@@ -464,6 +463,7 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 			}
 		}
 		
+		// selecting the rectangles that may contain the correct value
 		int *indices = (int *)malloc((nT-1) * sizeof(int));
 		int qq =0;
 		for (int k=0; k<nT-1; k++)
@@ -482,6 +482,8 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 			}
 		}
 		
+		// calculating the inverted bilinear interpolation for each of the selected rectangles
+		// until the value is found
 		double T = -1e50;
 		
 		for (int j=0; j<(nT-1); j++)
@@ -517,7 +519,7 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, double* rhoAxis,
 	double* TAxis, double** zArray)
 	{
-		
+		// searching the T interval containing the T value
 		int i=0;
 		for (int k=0; k<nT; k++)
 		{
@@ -528,6 +530,7 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 			}
 		}
 		
+		// selecting the rectangles that may contain the correct value
 		int *indices = (int *)malloc((nRho-1) * sizeof(int));
 		int qq =0;
 		for (int k=0; k<nRho-1; k++)
@@ -546,6 +549,8 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 			}
 		}
 
+		// calculating the inverted bilinear interpolation for each of the selected rectangles
+		// until the value is found
 		double rho = -1e50;
 
 		for (int j=0; j<(nRho-1); j++)
@@ -580,6 +585,9 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* rhoAxis,
 	double* TAxis, double** zArray)
 	{
+		// searching for grid rectangle containing the point
+		// could be calculated if grid is guarantied to be logarithmic
+		// as we do not assume that, we search for the grid rectangle
 		int i=0;
 		for (int k=0; k<nRho; k++)
 		{
@@ -599,14 +607,17 @@ double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* 
 			}
 		}
 		
+		// point not in grid
 		if (i < 0 || j < 0)
 		{
 			return -1e50;
 		}
 		
+		// scaling grid rectangle to unit square
 		double x=(rho-rhoAxis[i])/(rhoAxis[i+1]-rhoAxis[i]);
 		double y=(T-TAxis[j])/(TAxis[j+1]-TAxis[j]);
 		
+		// calculating bilinear interpolation
 		double f00=zArray[j][i];
 		double f01=zArray[j+1][i];
 		double f10=zArray[j][i+1];
