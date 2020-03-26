@@ -92,7 +92,7 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 
 	//fprintf(stderr, "Initializing arrays\n");
 
-	double *rhoAxis = (double *)malloc(sizeof(double)*nT);
+	double *rhoAxis = (double *)malloc(sizeof(double)*nRho);
 	double *TAxis = (double *)malloc(sizeof(double)*nT);
 	double **uArray = (double **)malloc(sizeof(double*)*nT);
 	double **pArray = (double **)malloc(sizeof(double*)*nT);
