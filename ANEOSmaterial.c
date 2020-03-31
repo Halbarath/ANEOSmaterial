@@ -33,8 +33,6 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 			assert(0);
 	}
 
-	//fprintf(stderr, "Initializing material...\n");
-	
 	double rho0;
 	int nRho;
 	int nT;
@@ -91,8 +89,6 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 	material->CodeUnitstoCGSforC = dKpcUnit*KPCCM*sqrt((material->CodeUnitstoCGSforRho*GCGS));
 	}
 
-	//fprintf(stderr, "Initializing arrays\n");
-
 	double *rhoAxis = (double *)malloc(sizeof(double)*nRho);
 	double *TAxis = (double *)malloc(sizeof(double)*nT);
 	double **uArray = (double **)malloc(sizeof(double*)*nT);
@@ -114,10 +110,6 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 	material->pArray = pArray;
 	material->cArray = cArray;
 	material->sArray = sArray;
-
-	//fprintf(stderr, "Initializing arrays finished\n");
-	
-	//fprintf(stderr, "Filling arrays\n");
 
 	if (fread(rhoAxis, sizeof(rhoAxis[0]), nRho, file)==0)
 	{
@@ -168,8 +160,7 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 	}
 	
 	fclose(file);
-	//fprintf(stderr, "Arrays filled\n");
-	//fprintf(stderr, "Material initialized\n");
+
 	return material;
 }
 
@@ -324,6 +315,7 @@ double ANEOSRhoofPT(ANEOSMATERIAL *material, double p, double T)
  */
 double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 {
+	// This is not really tested and may not work properly
 	double *Tdifference = (double *)malloc((material->nRho) * sizeof(double));
 	
 	for (int i=0; i<material->nRho; i++) 
@@ -408,8 +400,8 @@ double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double 
 {
 	double oldT = ANEOSTofRhoU(material,rho1,u1);
 	double oldS = interpolateValueBilinear(rho1*material->CodeUnitstoCGSforRho, oldT, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->sArray);
-	double newT = backwardInterpolateTemperatureBilinear(rho2*material->CodeUnitstoCGSforRho,oldS,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->sArray);
 	if (oldS<-1e40){fprintf(stderr,"ANEOSisentropicU oldS failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e\n", rho1, u1, rho2);}
+	double newT = backwardInterpolateTemperatureBilinear(rho2*material->CodeUnitstoCGSforRho,oldS,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->sArray);
 	if (newT<-1e40){fprintf(stderr,"ANEOSisentropicU newT failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e\n", rho1, u1, rho2);}
 	double newu = ANEOSUofRhoT(material,rho2,newT);
 	return newu;
@@ -461,6 +453,18 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 				i = k-1;
 				break;
 			}
+			if (k==(nRho-1))
+			{
+				// rho larger than rhoAxis[nRho-1]
+				fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, rho = %.15e is larger than maxRho = %.15e\n", rho, rhoAxis[k]);
+				return -1e50;
+			}
+		}
+		if (i==-1)
+		{
+			// rho smaller than rhoAxis[0]
+			fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, rho = %.15e is smaller than minRho = %.15e\n", rho, rhoAxis[0]);
+			return -1e50;
 		}
 		
 		// selecting the rectangles that may contain the correct value
@@ -509,6 +513,36 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 			
 		}
 		
+		if (T < -1e40)
+		{
+			// nothing found, find out why
+			int j = 0;
+			double x=(rho-rhoAxis[i])/(rhoAxis[i+1]-rhoAxis[i]);
+			double y = 0.0;
+			double f00=zArray[j][i];
+			double f01=zArray[j+1][i];
+			double f10=zArray[j][i+1];
+			double f11=zArray[j+1][i+1];
+			double zbottom = y*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(y - 1);
+			if (z < zbottom)
+			{
+				// below the grid
+				fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, z = %.15e is smaller than minz = %.15e\n", z, zbottom);
+			}
+			j = nT-2;
+			y = 1.0;
+			f00=zArray[j][i];
+			f01=zArray[j+1][i];
+			f10=zArray[j][i+1];
+			f11=zArray[j+1][i+1];
+			double ztop = y*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(y - 1);
+			if (z > ztop)
+			{
+				// above the grid
+				fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, z = %.15e is bigger than maxz = %.15e\n", z, ztop);
+			}
+		}
+
 		free(indices);
 		return T;
 	}
@@ -528,6 +562,18 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 				i = k-1;
 				break;
 			}
+			if (k==(nT-1))
+			{
+				// T larger than TAxis[nT-1]
+				fprintf(stderr,"ANEOS backwardInterpolateDensityBilinear failed, T = %.15e is larger than maxT = %.15e\n", T, TAxis[k]);
+				return -1e50;
+			}
+		}
+		if (i==-1)
+		{
+			// T smaller than TAxis[0]
+			fprintf(stderr,"ANEOS backwardInterpolateDensityBilinear failed, T = %.15e is smaller than minT = %.15e\n", T, TAxis[0]);
+			return -1e50;
 		}
 		
 		// selecting the rectangles that may contain the correct value
@@ -575,6 +621,36 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 			}
 		}
 		
+		if (rho < -1e40)
+		{
+			// nothing found, find out why
+			int j = 0;
+			double y=(T-TAxis[i])/(TAxis[i+1]-TAxis[i]);
+			double x = 0.0;
+			double f00=zArray[i][j];
+			double f01=zArray[i+1][j];
+			double f10=zArray[i][j+1];
+			double f11=zArray[i+1][j+1];
+			double zleft = y*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(y - 1);
+			if (z < zleft)
+			{
+				// left of the grid
+				fprintf(stderr,"ANEOS backwardInterpolateDensityBilinear failed, z = %.15e is smaller than minz = %.15e\n", z, zleft);
+			}
+			j = nT-2;
+			y = 1.0;
+			f00=zArray[i][j];
+			f01=zArray[i+1][j];
+			f10=zArray[i][j+1];
+			f11=zArray[i+1][j+1];
+			double zright = y*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(y - 1);
+			if (z > zright)
+			{
+				// right of the grid
+				fprintf(stderr,"ANEOS backwardInterpolateDensityBilinear failed, z = %.15e is bigger than maxz = %.15e\n", z, zright);
+			}
+		}
+
 		free(indices);
 		return rho;
 	}
@@ -596,7 +672,20 @@ double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* 
 				i = k-1;
 				break;
 			}
+			if (k==(nRho-1))
+			{
+				// rho larger than rhoAxis[nRho-1]
+				fprintf(stderr,"ANEOS interpolateValueBilinear failed, rho = %.15e is larger than maxRho = %.15e\n", rho, rhoAxis[k]);
+				return -1e50;
+			}
 		}
+		if (i==-1)
+		{
+			// rho smaller than rhoAxis[0]
+			fprintf(stderr,"ANEOS interpolateValueBilinear failed, rho = %.15e is smaller than minRho = %.15e\n", rho, rhoAxis[0]);
+			return -1e50;
+		}
+
 		int j=0;
 		for (int k=0; k<nT; k++)
 		{
@@ -605,14 +694,20 @@ double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* 
 				j = k-1;
 				break;
 			}
+			if (k==(nT-1))
+			{
+				// T larger than TAxis[nT-1]
+				fprintf(stderr,"ANEOS interpolateValueBilinear failed, T = %.15e is larger than maxT = %.15e\n", T, TAxis[k]);
+				return -1e50;
+			}
 		}
-		
-		// point not in grid
-		if (i < 0 || j < 0)
+		if (j==-1)
 		{
+			// rho smaller than rhoAxis[0]
+			fprintf(stderr,"ANEOS interpolateValueBilinear failed, T = %.15e is smaller than minT = %.15e\n", T, TAxis[0]);
 			return -1e50;
 		}
-		
+
 		// scaling grid rectangle to unit square
 		double x=(rho-rhoAxis[i])/(rhoAxis[i+1]-rhoAxis[i]);
 		double y=(T-TAxis[j])/(TAxis[j+1]-TAxis[j]);

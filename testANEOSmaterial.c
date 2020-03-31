@@ -5,8 +5,8 @@
 
 int main(int argc, char *argv[])
 {
-	double dKpcUnit = -1.0; //2.06701e-13;
-	double dMsolUnit = -1.0; //4.80438e-08;
+	double dKpcUnit = 2.06701e-13;
+	double dMsolUnit = 4.80438e-08;
 	
 	if (ANEOS_VERSION_MAJOR != 1) {
 		fprintf(stderr, "main: ANEOS library has the wrong version (%s)\n", ANEOS_VERSION_TEXT);
@@ -68,6 +68,24 @@ int main(int argc, char *argv[])
 	double dUdRho = ANEOSdUdRhoofRhoU(material, 8/material->CodeUnitstoCGSforRho, 1e12/material->CodeUnitstoCGSforU);
 	printf("dUdRho %.15e\n", dUdRho);
 	
+	printf("\n");
+	double testfail = ANEOSTofRhoU(material, 0/material->CodeUnitstoCGSforRho, 1e12/material->CodeUnitstoCGSforU);
+	testfail = ANEOSTofRhoU(material, 1000/material->CodeUnitstoCGSforRho, 1e12/material->CodeUnitstoCGSforU);
+	testfail = ANEOSTofRhoU(material, 8/material->CodeUnitstoCGSforRho, 0/material->CodeUnitstoCGSforU);
+	testfail = ANEOSTofRhoU(material, 8/material->CodeUnitstoCGSforRho, 1e25/material->CodeUnitstoCGSforU);
+	printf("\n");
+
+	testfail = ANEOSRhoofUT(material, 1e12/material->CodeUnitstoCGSforU, 0);
+	testfail = ANEOSRhoofUT(material, 1e12/material->CodeUnitstoCGSforU, 1e10);
+	testfail = ANEOSRhoofUT(material, 0/material->CodeUnitstoCGSforU, 100);
+	testfail = ANEOSRhoofUT(material, 1e25/material->CodeUnitstoCGSforU, 100);
+	printf("\n");
+
+	testfail = ANEOSUofRhoT(material, 0/material->CodeUnitstoCGSforRho, 100);
+	testfail = ANEOSUofRhoT(material, 1000/material->CodeUnitstoCGSforRho, 100);
+	testfail = ANEOSUofRhoT(material, 8/material->CodeUnitstoCGSforRho, 0);
+	testfail = ANEOSUofRhoT(material, 8/material->CodeUnitstoCGSforRho, 1e10);
+
 	ANEOSfinalizeMaterial(material);
 	return 0;
 }
