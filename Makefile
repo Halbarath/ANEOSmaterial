@@ -1,5 +1,5 @@
 objects = aneos.o 
-mylibobjects = ANEOSmaterial.o
+mylibobjects = ANEOSmaterial.o interpBilinear.o
 
 fortran_objects = libaneos.o
 
