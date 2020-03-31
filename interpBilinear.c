@@ -1,16 +1,15 @@
 /*
  * ANEOS material library
- * ANEOS material model
+ * ANEOS material bilinear interpolation functions
  *
  */
 
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 
 /*
- * Internal function to backward interpolate the temperature using bilinear interpolation
+ * Backward interpolate the temperature using bilinear interpolation
  */
 double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int nRho, double* rhoAxis,
 	double* TAxis, double** zArray)
@@ -134,7 +133,7 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 	}
 
 /*
- * Internal function to backward interpolate the density using bilinear interpolation
+ * Backward interpolate the density using bilinear interpolation
  */
 double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, double* rhoAxis,
 	double* TAxis, double** zArray)
@@ -245,7 +244,7 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 	}
 
 /*
- * Internal function to interpolate a value using bilinear interpolation
+ * Interpolate a value using bilinear interpolation
  */
 double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* rhoAxis,
 	double* TAxis, double** zArray)
