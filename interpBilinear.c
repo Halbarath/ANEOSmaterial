@@ -7,6 +7,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "interpBilinear.h"
 
 /*
  * Backward interpolate the temperature using bilinear interpolation
@@ -138,6 +139,27 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, double* rhoAxis,
 	double* TAxis, double** zArray)
 	{
+		/*double a = rhoAxis[0];
+		double b = rhoAxis[nRho-1]*0.999;
+		double c;
+		double zc;
+
+		double za = interpolateValueBilinear(a, T, nT, nRho, rhoAxis, TAxis, zArray);
+		double zb = interpolateValueBilinear(b, T, nT, nRho, rhoAxis, TAxis, zArray);
+
+		while (2*(b-a)/(b+a) > 1e-6) {
+			c = 0.5*(a + b);
+			zc = interpolateValueBilinear(c, T, nT, nRho, rhoAxis, TAxis, zArray);
+			if (zc > z) {
+				b = c;
+				zb = zc;
+			} else {
+				a = c;
+				za = zc;
+			}
+		}
+		return c;*/
+
 		// check if T is out of bounds
 		if (T < TAxis[0])
 		{
@@ -173,7 +195,7 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 
 			if (z <= maximum && z >= minimum)
 			{
-				qq=qq+1;;
+				qq=qq+1;
 				indices[k] = 1;
 			} else {
 				indices[k] = 0;
