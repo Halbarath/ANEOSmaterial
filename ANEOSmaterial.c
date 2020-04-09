@@ -67,6 +67,7 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 	material->rho0 = rho0;
 	material->nRho = nRho;
 	material->nT = nT;
+	strcpy(material->matName,inputfile);
 	
 	material->CodeUnitstoCGSforU = 1;
 	material->CodeUnitstoCGSforP = 1;
@@ -213,6 +214,7 @@ double ANEOSTofRhoU(ANEOSMATERIAL *material, double rho, double u)
 	if (T<-1e40)
 	{
 		fprintf(stderr,"ANEOSTofRhoU failed for rho = %.15e, u = %.15e\n", rho, u);
+		T = 1.0;
 	}
 	return T;
 }
@@ -437,4 +439,17 @@ double ANEOSdUdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
 	double dUdRho = ANEOSPofRhoU(material, rho, u)/(rho*rho);
 	return dUdRho;
+}
+
+void ANEOSMatString(ANEOSMATERIAL *material, char *MatName)
+{
+	strcpy(MatName, material->matName);
+}
+
+void ANEOSprintMat(ANEOSMATERIAL *material)
+{
+	char MatName[256];
+	ANEOSMatString(material, MatName);
+	fprintf(stderr,"Material: %i (%s)\n", material->iMat, MatName);
+	fprintf(stderr,"Table size: nRho = %d, nT = %d\n", material->nRho, material->nT);
 }

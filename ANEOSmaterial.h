@@ -15,6 +15,7 @@ typedef struct ANEOSmaterial
 	double rho0; // reference density
 	int nRho; // Number of entries in the interpolation arrays in the rho dimension
 	int nT; // Number of entries in the interpolation arrays in the T dimension
+	char matName[256];
 	
 	// unit conversion
 	double CodeUnitstoCGSforU;
@@ -65,11 +66,5 @@ double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSdPdUofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSdUdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u);
 
-// Internal functions
-
-double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int nRho, double* rhoAxis,
-	double* TAxis, double** zArray);
-double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, double* rhoAxis,
-	double* TAxis, double** uArray);
-double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* rhoAxis,
-	double* TAxis, double** zArray);
+void ANEOSMatString(ANEOSMATERIAL *material, char *MatName);
+void ANEOSprintMat(ANEOSMATERIAL *material);

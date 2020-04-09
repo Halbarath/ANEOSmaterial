@@ -86,6 +86,12 @@ int main(int argc, char *argv[])
 	testfail = ANEOSUofRhoT(material, 8/material->CodeUnitstoCGSforRho, 0);
 	testfail = ANEOSUofRhoT(material, 8/material->CodeUnitstoCGSforRho, 1e10);
 
+	char matName[256];
+	ANEOSMatString(material, matName);
+	printf("Mat name %s\n",matName);
+
+	ANEOSprintMat(material);
+
 	ANEOSfinalizeMaterial(material);
 	return 0;
 }
