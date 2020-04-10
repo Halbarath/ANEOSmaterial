@@ -451,5 +451,6 @@ void ANEOSprintMat(ANEOSMATERIAL *material)
 	char MatName[256];
 	ANEOSMatString(material, MatName);
 	fprintf(stderr,"Material: %i (%s)\n", material->iMat, MatName);
+	fprintf(stderr,"Reference density rho0: %g\n", material->rho0/material->CodeUnitstoCGSforRho);
 	fprintf(stderr,"Table size: nRho = %d, nT = %d\n", material->nRho, material->nT);
 }
