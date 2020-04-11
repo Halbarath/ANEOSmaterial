@@ -446,11 +446,11 @@ void ANEOSMatString(ANEOSMATERIAL *material, char *MatName)
 	strcpy(MatName, material->matName);
 }
 
-void ANEOSprintMat(ANEOSMATERIAL *material)
+void ANEOSprintMat(ANEOSMATERIAL *material, FILE *fp)
 {
 	char MatName[256];
 	ANEOSMatString(material, MatName);
-	fprintf(stderr,"Material: %i (%s)\n", material->iMat, MatName);
-	fprintf(stderr,"Reference density rho0: %g\n", material->rho0/material->CodeUnitstoCGSforRho);
-	fprintf(stderr,"Table size: nRho = %d, nT = %d\n", material->nRho, material->nT);
+	fprintf(fp,"# Material: %i (%s)\n", material->iMat, MatName);
+	fprintf(fp,"# Reference density rho0: %g\n", material->rho0/material->CodeUnitstoCGSforRho);
+	fprintf(fp,"# Table size: nRho = %d, nT = %d\n", material->nRho, material->nT);
 }

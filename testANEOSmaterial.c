@@ -90,7 +90,7 @@ int main(int argc, char *argv[])
 	ANEOSMatString(material, matName);
 	printf("Mat name %s\n",matName);
 
-	ANEOSprintMat(material);
+	ANEOSprintMat(material, stderr);
 
 	ANEOSfinalizeMaterial(material);
 	return 0;
