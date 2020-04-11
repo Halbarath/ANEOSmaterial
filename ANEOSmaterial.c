@@ -446,7 +446,7 @@ void ANEOSMatString(ANEOSMATERIAL *material, char *MatName)
 	strcpy(MatName, material->matName);
 }
 
-void ANEOSprintMat(ANEOSMATERIAL *material, FILE *fp)
+void ANEOSPrintMat(ANEOSMATERIAL *material, FILE *fp)
 {
 	char MatName[256];
 	ANEOSMatString(material, MatName);
