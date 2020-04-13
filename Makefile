@@ -9,7 +9,7 @@ execs = testANEOSmaterial writeANEOStable writePhase
 GSL_LIB = -lgsl -lgslcblas
 FC := gfortran
 
-CFLAGS ?= -O3
+CFLAGS ?= -O3 -Wall -std=c99
 
 FFLAGS ?= $(CFLAGS)
 LIBS ?= -lm -lgfortran $(GSL_LIB)
