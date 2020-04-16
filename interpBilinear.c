@@ -139,7 +139,7 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, double* rhoAxis,
 	double* TAxis, double** zArray)
 	{
-		/*double a = rhoAxis[0];
+		double a = rhoAxis[0];
 		double b = rhoAxis[nRho-1]*0.999;
 		double c;
 		double zc;
@@ -158,9 +158,9 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 				za = zc;
 			}
 		}
-		return c;*/
+		return c;
 
-		// check if T is out of bounds
+		/*// check if T is out of bounds
 		if (T < TAxis[0])
 		{
 			fprintf(stderr,"ANEOS backwardInterpolateDensityBilinear failed, T = %.15e is smaller than minT = %.15e\n", T, TAxis[0]);
@@ -262,7 +262,7 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 		}
 
 		free(indices);
-		return rho;
+		return rho;*/
 	}
 
 /*
