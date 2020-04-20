@@ -416,8 +416,34 @@ double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double 
 double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
 	// Finite difference for derivative
-	double h = 0.00001 * rho;
-	double dPdRho = (-ANEOSPofRhoU(material, rho - h, u) + ANEOSPofRhoU(material, rho + h, u))/(2*h);
+    double h = 1e-6 * rho;
+    double dPdRho = 0;
+
+    /*fprintf(stderr, "rho = %g\n", rho);
+    fprintf(stderr, "rho0 = %g\n", material->rho0/material->CodeUnitstoCGSforRho);
+    fprintf(stderr, "u = %g\n", u);
+    fprintf(stderr, "ucold(rho)= %g\n", ANEOSUofRhoT(material, rho, material->TAxis[0]));
+    fprintf(stderr, "ucold(rho-h)= %g\n", ANEOSUofRhoT(material, rho-h, material->TAxis[0]));
+    fprintf(stderr, "ucold(rho+h)= %g\n", ANEOSUofRhoT(material, rho+h, material->TAxis[0]));
+    fprintf(stderr, "ucold(rho0)= %g\n", ANEOSUofRhoT(material, material->rho0/material->CodeUnitstoCGSforRho, material->TAxis[0]));*/
+
+    double ucoldl = ANEOSUofRhoT(material, rho - h, material->TAxis[0]);
+    double ucoldr = ANEOSUofRhoT(material, rho + h, material->TAxis[0]);
+
+    if (ucoldl <= u && ucoldr <= u)
+    {
+        dPdRho = (-ANEOSPofRhoU(material, rho - h, u) + ANEOSPofRhoU(material, rho + h, u))/(2*h);
+    } else if (ucoldl <= u)
+    {
+        dPdRho = (-ANEOSPofRhoU(material, rho - h, u) + ANEOSPofRhoU(material, rho, u))/h;
+    } else if (ucoldr <= u)
+    {
+        dPdRho = (-ANEOSPofRhoU(material, rho, u) + ANEOSPofRhoU(material, rho + h, u))/h;
+    } else
+    {
+        dPdRho = (-ANEOSPofRhoU(material, rho, u) + ANEOSPofRhoU(material, rho + h, u))/h;
+    }
+
 	return dPdRho;
 }
 
@@ -427,8 +453,9 @@ double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
 double ANEOSdPdUofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
 	// Finite difference for derivative
-	double h = 0.00001 * u;
-	double dPdU=(-ANEOSPofRhoU(material, rho, u - h) + ANEOSPofRhoU(material, rho, u + h))/(2*h);
+	double h = 1e-5 * u;
+	//double dPdU=(-ANEOSPofRhoU(material, rho, u - h) + ANEOSPofRhoU(material, rho, u + h))/(2*h);
+    double dPdU = (ANEOSPofRhoU(material, rho, u + h) - ANEOSPofRhoU(material, rho, u))/h;
 	return dPdU;
 }
 
