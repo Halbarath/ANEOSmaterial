@@ -445,7 +445,7 @@ double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
 double ANEOSdPdUofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
 	// Finite difference for derivative
-	double h = 1e-5 * u;
+	double h = fabs(1e-5 * u);
     double dPdU = (ANEOSPofRhoU(material, rho, u + h) - ANEOSPofRhoU(material, rho, u))/h;
 	return dPdU;
 }

@@ -71,7 +71,7 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 		}
 		
 		// selecting the rectangles that may contain the correct value
-		int *indices = (int *)malloc((nT-1) * sizeof(int));
+		/*int *indices = (int *)malloc((nT-1) * sizeof(int));
 		int qq =0;
 		for (int k=0; k<nT-1; k++)
 		{
@@ -87,7 +87,7 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 			} else {
 				indices[k] = 0;
 			}
-		}
+		}*/
 		
 		// calculating the inverted bilinear interpolation for each of the selected rectangles
 		// until the value is found
@@ -95,10 +95,10 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 		
 		for (int j=0; j<(nT-1); j++)
 		{
-			if (indices[j]==0)
-			{
-				continue;
-			}
+			//if (indices[j]==0)
+			//{
+			//	continue;
+			//}
 			double x=(rho-rhoAxis[i])/(rhoAxis[i+1]-rhoAxis[i]);
 		
 			double f00=zArray[j][i];
@@ -108,7 +108,7 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 			
 			double y = -(z - f10*x + f00*(x - 1))/(f10*x - f11*x - f00*(x - 1) + f01*(x - 1));
 
-			if (y>= 0 && y<=1)
+			if (y>= 0.0 && y<=1.0)
 			{
 				T = (TAxis[j+1]-TAxis[j])*y+TAxis[j];
 				break;
@@ -149,7 +149,7 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 			}
 		}
 
-		free(indices);
+		//free(indices);
 		return T;
 	}
 
