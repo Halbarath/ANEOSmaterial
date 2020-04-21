@@ -66,5 +66,8 @@ double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSdPdUofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSdUdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u);
 
+double ANEOSdPdRhoofRhoT(ANEOSMATERIAL *material, double rho, double T);
+double ANEOSdPdTofRhoT(ANEOSMATERIAL *material, double rho, double T);
+
 void ANEOSMatString(ANEOSMATERIAL *material, char *MatName);
 void ANEOSPrintMat(ANEOSMATERIAL *material, FILE *fp);
