@@ -433,7 +433,8 @@ double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
         dPdRho = (-ANEOSPofRhoU(material, rho, u) + ANEOSPofRhoU(material, rho + h, u))/h;
     } else
     {
-        dPdRho = (-ANEOSPofRhoU(material, rho, u) + ANEOSPofRhoU(material, rho + h, u))/h;
+        h = h*1e-4;
+        dPdRho = (-ANEOSPofRhoU(material, rho - h, u) + ANEOSPofRhoU(material, rho + h, u))/(2*h);
     }
 
 	return dPdRho;
