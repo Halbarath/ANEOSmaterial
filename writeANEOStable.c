@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
 
     fprintf(stderr, "Read axes file\n");
 
-    char axesFilename[256] = "axes.in";
+    char axesFilename[256] = "axes_2000x2000.in";
 
     FILE *fp = NULL;
     char str[1000];
@@ -84,7 +84,9 @@ int main(int argc, char *argv[])
     fclose(fp);
 
     fprintf(stderr, "Initializing material...\n");
-    char matFilename[256] = "aneos.input";
+    //char matFilename[256] = "aneos.input";
+    // Uncomment below to use M-ANEOS
+    char matFilename[256] = "maneos.in";
     initaneos(matFilename);
     fprintf(stderr, "Material initializing finished...\n");
 
