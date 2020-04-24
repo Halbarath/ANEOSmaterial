@@ -25,6 +25,9 @@ int main(int argc, char *argv[])
 
     switch(iMat)
     {
+        case 1:
+            rho0 = 1.1;
+            break;
         case 2:
             rho0 = 1.11;
             break;
@@ -34,6 +37,9 @@ int main(int argc, char *argv[])
         case 5:
             rho0 = 7.85;
             break;
+        default:
+            fprintf(stderr, "Unknown material id: %i\n", iMat);
+            exit(1);
     }
 
 
