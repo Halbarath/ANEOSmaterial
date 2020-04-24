@@ -1,6 +1,5 @@
 objects = aneos.o 
 
-objects = maneos.o 
 mylibobjects = ANEOSmaterial.o interpBilinear.o
 
 # Compile with ANEOS
