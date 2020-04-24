@@ -3,9 +3,9 @@ objects = aneos.o
 mylibobjects = ANEOSmaterial.o interpBilinear.o
 
 # Compile with ANEOS
-#fortran_objects = libaneos.o
+fortran_objects = libaneos.o
 # Compile with MANEOS
-fortran_objects = libmaneos.o
+#fortran_objects = libmaneos.o
 
 execs = testANEOSmaterial writeANEOStable writePhase
 
