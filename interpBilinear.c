@@ -345,4 +345,4 @@ double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* 
 		
 		z = y*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(y - 1);
 		return z;
-	};
+	}
