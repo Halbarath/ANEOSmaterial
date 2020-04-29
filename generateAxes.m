@@ -2,12 +2,12 @@ clear
 close all
 clc
 
-nRho=501;
-nT=501;
+nRho=1401;
+nT=1201;
 
 minRho=1e-4;
-maxRho=100;
-minT=1e-4;
+maxRho=1000;
+minT=1;
 maxT=1e6;
 
 rhoAxis=logspace(log10(minRho),log10(maxRho),nRho);
