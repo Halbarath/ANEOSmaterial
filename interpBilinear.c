@@ -18,12 +18,16 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 		// check if (rho,T) is out of bounds
 		if (rho < rhoAxis[0])
 		{
+#ifdef EOSLIB_VERBOSE
 			fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, rho = %.15e is smaller than minRho = %.15e\n", rho, rhoAxis[0]);
+#endif
 			return -1e50;
 		}
 		if (rho >= rhoAxis[nRho-1])
 		{
+#ifdef EOSLIB_VERBOSE
 			fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, rho = %.15e is larger than maxRho = %.15e\n", rho, rhoAxis[nRho-1]);
+#endif
 			return -1e50;
 		}
 
@@ -59,14 +63,18 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 			if (k==(nRho-1))
 			{
 				// rho larger than rhoAxis[nRho-1]
+#ifdef EOSLIB_VERBOSE
 				fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, rho = %.15e is larger than maxRho = %.15e\n", rho, rhoAxis[k]);
+#endif
 				return -1e50;
 			}
 		}
 		if (i==-1)
 		{
 			// rho smaller than rhoAxis[0]
+#ifdef EOSLIB_VERBOSE
 			fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, rho = %.15e is smaller than minRho = %.15e\n", rho, rhoAxis[0]);
+#endif
 			return -1e50;
 		}
 		
@@ -130,11 +138,14 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 			double f10=zArray[j][i+1];
 			double f11=zArray[j+1][i+1];
 			double zbottom = y*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(y - 1);
+
+#ifdef EOSLIB_VERBOSE
 			if (z < zbottom)
 			{
 				// below the grid
 				fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, z = %.15e is smaller than minz = %.15e\n", z, zbottom);
 			}
+#endif
 			j = nT-2;
 			y = 1.0;
 			f00=zArray[j][i];
@@ -142,11 +153,14 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 			f10=zArray[j][i+1];
 			f11=zArray[j+1][i+1];
 			double ztop = y*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(y - 1);
+
+#ifdef EOSLIB_VERBOSE
 			if (z > ztop)
 			{
 				// above the grid
 				fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, z = %.15e is bigger than maxz = %.15e\n", z, ztop);
 			}
+#endif
 		}
 
 		//free(indices);
@@ -162,12 +176,16 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
         // check if T is out of bounds
 		if (T < TAxis[0])
 		{
+#ifdef EOSLIB_VERBOSE
 			fprintf(stderr,"ANEOS backwardInterpolateDensityBilinear failed, T = %.15e is smaller than minT = %.15e\n", T, TAxis[0]);
+#endif
 			return -1e50;
 		}
 		if (T >= TAxis[nT-1])
 		{
+#ifdef EOSLIB_VERBOSE
 			fprintf(stderr,"ANEOS backwardInterpolateDensityBilinear failed, T = %.15e is larger than maxT = %.15e\n", T, TAxis[nT-1]);
+#endif
 			return -1e50;
 		}
 
@@ -288,23 +306,31 @@ double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* 
 	{
 		// check if (rho,T) is out of bounds
 		if (rho < rhoAxis[0])
+#ifdef EOSLIB_VERBOSE
 		{
 			fprintf(stderr,"ANEOS interpolateValueBilinear failed, rho = %.15e is smaller than minRho = %.15e\n", rho, rhoAxis[0]);
+#endif
 			return -1e50;
 		}
 		if (rho >= rhoAxis[nRho-1])
 		{
+#ifdef EOSLIB_VERBOSE
 			fprintf(stderr,"ANEOS interpolateValueBilinear failed, rho = %.15e is larger than maxRho = %.15e\n", rho, rhoAxis[nRho-1]);
+#endif
 			return -1e50;
 		}
 		if (T < TAxis[0])
 		{
+#ifdef EOSLIB_VERBOSE
 			fprintf(stderr,"ANEOS interpolateValueBilinear failed, T = %.15e is smaller than minT = %.15e\n", T, TAxis[0]);
+#endif
 			return -1e50;
 		}
 		if (T >= TAxis[nT-1])
 		{
+#ifdef EOSLIB_VERBOSE
 			fprintf(stderr,"ANEOS interpolateValueBilinear failed, T = %.15e is larger than maxT = %.15e\n", T, TAxis[nT-1]);
+#endif
 			return -1e50;
 		}
 
