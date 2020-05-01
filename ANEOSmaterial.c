@@ -216,7 +216,9 @@ double ANEOSTofRhoU(ANEOSMATERIAL *material, double rho, double u)
 	double T = backwardInterpolateTemperatureBilinear(rho*material->CodeUnitstoCGSforRho,u*material->CodeUnitstoCGSforU,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->uArray); 
 	if (T<-1e40)
 	{
+#ifdef EOSLIB_VERBOSE
 		fprintf(stderr,"ANEOSTofRhoU failed for rho = %.15e, u = %.15e\n", rho, u);
+#endif
 		T = 1.0;
 	}
 	return T;

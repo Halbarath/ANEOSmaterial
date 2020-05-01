@@ -123,7 +123,7 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
         }
 
     }
-
+#ifdef EOSLIB_VERBOSE
     if (T < -1e40)
     {
         // nothing found, find out why
@@ -139,13 +139,11 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
         double f11=zArray[j+1][i+1];
         double zbottom = y*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(y - 1);
 
-#ifdef EOSLIB_VERBOSE
         if (z < zbottom)
         {
             // below the grid
             fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, z = %.15e is smaller than minz = %.15e\n", z, zbottom);
         }
-#endif
         j = nT-2;
         y = 1.0;
         f00=zArray[j][i];
@@ -153,16 +151,13 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
         f10=zArray[j][i+1];
         f11=zArray[j+1][i+1];
         double ztop = y*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(y - 1);
-
-#ifdef EOSLIB_VERBOSE
         if (z > ztop)
         {
             // above the grid
             fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, z = %.15e is bigger than maxz = %.15e\n", z, ztop);
         }
-#endif
     }
-
+#endif
     //free(indices);
     return T;
 }
