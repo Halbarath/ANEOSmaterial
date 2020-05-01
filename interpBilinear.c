@@ -306,8 +306,8 @@ double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* 
 {
     // check if (rho,T) is out of bounds
     if (rho < rhoAxis[0])
-#ifdef EOSLIB_VERBOSE
     {
+#ifdef EOSLIB_VERBOSE
         fprintf(stderr,"ANEOS interpolateValueBilinear failed, rho = %.15e is smaller than minRho = %.15e\n", rho, rhoAxis[0]);
 #endif
         return -1e50;
