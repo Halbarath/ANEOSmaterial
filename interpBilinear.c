@@ -31,71 +31,8 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
         return -1e50;
     }
 
-    /*double a = TAxis[0];
-      double b = TAxis[nRho-1]*0.999;
-      double c = -1e50;
-      double zc = 0;
-
-      while (2*(b-a)/(b+a) > 1e-10) {
-      c = 0.5*(a + b);
-      zc = interpolateValueBilinear(rho, c, nT, nRho, rhoAxis, TAxis, zArray);
-      if (zc > z) {
-      b = c;
-      } else {
-      a = c;
-      }
-      }
-
-      if (fabs((zc-z)/z)<1e-4)
-      {
-      return c;
-      }*/
-
     // searching the rho interval containing the rho value
-    int i=0;
-    for (int k=0; k<nRho; k++)
-    {
-        if (rhoAxis[k]>rho)
-        {
-            i = k-1;
-            break;
-        }
-        if (k==(nRho-1))
-        {
-            // rho larger than rhoAxis[nRho-1]
-#ifdef EOSLIB_VERBOSE
-            fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, rho = %.15e is larger than maxRho = %.15e\n", rho, rhoAxis[k]);
-#endif
-            return -1e50;
-        }
-    }
-    if (i==-1)
-    {
-        // rho smaller than rhoAxis[0]
-#ifdef EOSLIB_VERBOSE
-        fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, rho = %.15e is smaller than minRho = %.15e\n", rho, rhoAxis[0]);
-#endif
-        return -1e50;
-    }
-
-    // selecting the rectangles that may contain the correct value
-    /*int *indices = (int *)malloc((nT-1) * sizeof(int));
-      int qq =0;
-      for (int k=0; k<nT-1; k++)
-      {
-    // calculate minimum of the four points
-    double minimum = fmin(fmin(fmin(zArray[k][i],zArray[k+1][i]),zArray[k][i+1]),zArray[k+1][i+1]);
-    // calculate maximum of the four points
-    double maximum = fmax(fmax(fmax(zArray[k][i],zArray[k+1][i]),zArray[k][i+1]),zArray[k+1][i+1]);
-
-    if (z <= maximum && z >= minimum)
-    {
-    qq=qq+1;
-    indices[k] = 1;
-    } else {
-    indices[k] = 0;
-    }
-    }*/
+    int i=findIndex(rho, rhoAxis, nRho);
 
     // calculating the inverted bilinear interpolation for each of the selected rectangles
     // until the value is found
@@ -332,25 +269,9 @@ double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* 
     // searching for grid rectangle containing the point
     // could be calculated if grid is guarantied to be logarithmic
     // as we do not assume that, we search for the grid rectangle
-    int i=0;
-    for (int k=0; k<nRho; k++)
-    {
-        if (rhoAxis[k]>rho)
-        {
-            i = k-1;
-            break;
-        }
-    }
+    int i=findIndex(rho, rhoAxis, nRho);
 
-    int j=0;
-    for (int k=0; k<nT; k++)
-    {
-        if (TAxis[k]>T)
-        {
-            j = k-1;
-            break;
-        }
-    }
+    int j=findIndex(T, TAxis, nT);
 
     // scaling grid rectangle to unit square
     double x=(rho-rhoAxis[i])/(rhoAxis[i+1]-rhoAxis[i]);
@@ -366,4 +287,28 @@ double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* 
 
     z = y*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(y - 1);
     return z;
+}
+
+int findIndex(double x, double* xAxis, int nX)
+{
+    // This code assumes that nX is something that is a multiple of 10 plus 1 = n*10 + 1
+    int startIndex = 0;
+    for (int testind = 1; testind < 11; testind++)
+    {
+        if (xAxis[(nX-1)/10*testind]>x)
+        {
+            startIndex = (nX-1)/10*(testind-1);
+            break;
+        }
+    }
+    int i = 0;
+     for (int k=startIndex; k<nX; k++)
+    {
+        if (xAxis[k]>x)
+        {
+            i = k-1;
+            break;
+        }
+    }
+    return i;
 }

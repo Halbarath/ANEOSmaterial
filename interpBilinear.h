@@ -13,4 +13,5 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 	double* TAxis, double** uArray);
 double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* rhoAxis,
 	double* TAxis, double** zArray);
+int findIndex(double x, double* xAxis, int nX);
 #endif
