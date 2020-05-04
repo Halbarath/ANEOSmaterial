@@ -126,7 +126,7 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
     double c = -1e50;
     double zc = 0;
 
-    while (2*(b-a)/(b+a) > 1e-6) {
+    while (2*(b-a)/(b+a) > 1e-10) {
         c = 0.5*(a + b);
         zc = interpolateValueBilinear(c, T, nT, nRho, rhoAxis, TAxis, zArray);
         if (zc > z) {
@@ -293,7 +293,7 @@ int findIndex(double x, double* xAxis, int nX)
 {
     // This code assumes that nX - 1 is is a multiple of 10
     int startIndex = 0;
-    int n = 50;
+    int n = 10;
     for (int testind = 1; testind < n + 1; testind++)
     {
         if (xAxis[(nX-1)/n*testind]>x)
