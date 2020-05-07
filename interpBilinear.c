@@ -293,7 +293,7 @@ int findIndex(double x, double* xAxis, int nX)
 {
     // This code assumes that nX - 1 is is a multiple of 10
     int startIndex = 0;
-    int n = 10;
+    int n = 50;
     for (int testind = 1; testind < n + 1; testind++)
     {
         if (xAxis[(nX-1)/n*testind]>x)
