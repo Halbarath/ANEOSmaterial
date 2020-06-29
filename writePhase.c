@@ -1,6 +1,6 @@
 /*
  * ANEOS material library
- * Writes the binary input file for the ANEOS material model
+ * Writes the phase data on a grid for the ANEOS material model
  *
  */
 
