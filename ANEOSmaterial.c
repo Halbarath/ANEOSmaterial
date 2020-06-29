@@ -219,7 +219,7 @@ double ANEOSTofRhoU(ANEOSMATERIAL *material, double rho, double u)
 #ifdef EOSLIB_VERBOSE
 		fprintf(stderr,"ANEOSTofRhoU failed for rho = %.15e, u = %.15e\n", rho, u);
 #endif
-		T = 1.0;
+		T = material->TAxis[0];
 	}
 	return T;
 }
