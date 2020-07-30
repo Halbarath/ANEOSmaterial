@@ -32,6 +32,9 @@ writeANEOStable: writeANEOStable.o $(objects) $(fortran_objects)
 writePhase: writePhase.o $(objects) $(fortran_objects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+aneoscall: aneoscall.o $(objects) $(fortran_objects) 
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 clean:
 	rm -f $(execs) $(objects) $(fortran_objects) $(mylibobjects)
 
