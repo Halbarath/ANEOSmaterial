@@ -8,7 +8,7 @@ rho = A(3:A(1)+2);
 T = A(A(1)+3:end);
 
 % B=textread('phase_ice.txt');
-B=textread('phase_iron.txt');
+B=textread('phase_dunite.txt');
 
 [X,Y]=meshgrid(rho,T);
 
@@ -18,12 +18,14 @@ set(gca, 'YScale', 'log')
 shading flat
 colorbar
 
-xlabel('Density [g/cm3]')
+xlabel('Density [g/cm^3]')
 ylabel('Temperature [K]')
-title('Phase indicator for ICE')
+title('Phase indicator for Dunite')
 % print2pdf('phaseDUNITE')
 hold on
 % plot3(1.11,273.15,1e10,'x')
 % plot3(1.11,373.15,1e10,'x')
-plot3(7.85,1811,1e10,'x')
-plot3(7.85,3273,1e10,'x')
+% plot3(7.85,1811,1e10,'x')
+% plot3(7.85,3273,1e10,'x')
+axis tight
+exportgraphics(gcf,'phase_dunite.png','Resolution',600)
