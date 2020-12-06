@@ -38,6 +38,12 @@ writePressureTable: writePressureTable.o $(objects) $(fortran_objects)
 aneoscall: aneoscall.o $(objects) $(fortran_objects) 
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+aneoscalcentropy: aneoscalcentropy.o $(objects) $(fortran_objects) 
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+tipsy_iphase_array: tipsy_iphase_array.o $(objects) $(fortran_objects) tipsy.o 
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 clean:
 	rm -f $(execs) $(objects) $(fortran_objects) $(mylibobjects)
 
