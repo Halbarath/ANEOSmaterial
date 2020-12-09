@@ -169,10 +169,16 @@ int main(int argc, char **argv) {
     exit(1);
 #endif
 
-    if (argc != 1) {
-        fprintf(stderr,"Usage: tipsy_iphase_array <tipsy.std\n");
+    if (argc != 3) {
+        fprintf(stderr,"Usage: tipsy_iphase_array tipsy.std phasefile\n");
         exit(1);
     }
+    
+    char inputfile[256] = "";
+    strcpy(inputfile, argv[1]);
+    
+    char outputfile[256] = "";
+    strcpy(outputfile, argv[2]);
 
     /* Units. */
 	dErgPerGmUnit = GCGS*dMsolUnit*MSOLG/(dKpcUnit*KPCCM);
@@ -184,18 +190,21 @@ int main(int argc, char **argv) {
     /* Initialize ANEOS. */
     fprintf(stderr, "ANEOS: Initializing material...\n");
     initaneos(matFilename);
+    sleep(10);
 
     /* Initialize tipsy library */
-    TipsyInitialize(&in, 0, "stdin");
+    TipsyInitialize(&in, 0, inputfile);
 
     N = iTipsyNumParticles(in);
     time = dTipsyTime(in);
 
     /* Read all particles. */
 	TipsyReadAll(in);
+    
+    FILE *file = fopen(outputfile, "w");
 
     /* Print header for the array file. */
-    printf("%i\n",N);
+    fprintf(file,"%i\n",N);
 
     for (i = 0; i < N; i++) {
         iMat = (int) in->gp[i].metals;
@@ -231,7 +240,7 @@ int main(int argc, char **argv) {
         callaneos_cgs(T, rho, iMat, &p, &u, &s, &cv, &dPdT, &dPdrho, &fkros, &cs, &iPhase, &rhoL,
                       &rhoH, &ion);
 
-        printf("%i\n", iPhase);
+        fprintf(file,"%i\n", iPhase);
     }
 
     TipsyFinish(in);
