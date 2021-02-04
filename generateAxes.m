@@ -10,7 +10,8 @@ maxRho=1000;
 minT=1;
 maxT=1e6;
 
-rhoAxis=logspace(log10(minRho),log10(maxRho),nRho);
+% Add one grid point at 1e-25 to have larger density range covered
+rhoAxis=[1e-25 logspace(log10(minRho),log10(maxRho),nRho)];
 % rhoAxis1 = logspace(log10(minRho),log10(3),201);
 % rhoAxis2 = logspace(log10(3),log10(7),2001);
 % rhoAxis3 = logspace(log10(7),log10(100),51);
