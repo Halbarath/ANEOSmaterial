@@ -36,7 +36,16 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 		default:
 			assert(0);
 	}
+    
+    ANEOSMATERIAL *material;
+	
+	material = ANEOSinitMaterialFromFile(iMat, inputfile, dKpcUnit, dMsolUnit);
 
+	return material;
+}
+
+ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcUnit, double dMsolUnit)
+{
 	double rho0;
 	int nRho;
 	int nT;

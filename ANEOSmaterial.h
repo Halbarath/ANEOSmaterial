@@ -36,6 +36,7 @@ typedef struct ANEOSmaterial
 // Initialization and finalization
 
 ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit);
+ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcUnit, double dMsolUnit);
 void ANEOSfinalizeMaterial(ANEOSMATERIAL *material);
 
 // Access functions
