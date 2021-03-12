@@ -12,14 +12,18 @@
 
 int main(int argc, char *argv[])
 {
-    if (argc != 3) {
-        fprintf(stderr,"Usage: writeANEOStable <iMat> <outputfile>\n");
+    if (argc != 3 && argc != 4) {
+        fprintf(stderr,"Usage: writeANEOStable <iMat> <outputfile> (\"material string\")\n");
         exit(1);
     }
 
     int iMat = atoi(argv[1]);
     char outputfile[256] = "";
     strcpy(outputfile, argv[2]);
+    char matstring[1024] = "";
+    if (argc == 4) {
+        strcpy(matstring, argv[3]);
+    }
 
     double rho0;
 
@@ -175,6 +179,10 @@ int main(int argc, char *argv[])
     for (int i=0; i< nT; i++)
     {
         fwrite(cArray[i], sizeof(cArray[i][0]), nRho, file);
+    }
+    
+    if (argc == 4) {
+        fwrite(matstring, sizeof(matstring), 1, file);
     }
 
     fclose(file);

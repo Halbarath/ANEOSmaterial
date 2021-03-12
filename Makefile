@@ -7,7 +7,7 @@ fortran_objects = libaneos.o
 # Compile with MANEOS
 #fortran_objects = libmaneos.o
 
-execs = testANEOSmaterial writeANEOStable writePhase writePressureTable
+execs = testANEOSmaterial writeANEOStable writePhase writePressureTable aneoscall tipsy_iphase_array
 
 # GNU Science library (uncomment if not needed)
 GSL_LIB = -lgsl -lgslcblas
@@ -36,9 +36,6 @@ writePressureTable: writePressureTable.o $(objects) $(fortran_objects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 aneoscall: aneoscall.o $(objects) $(fortran_objects) 
-	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-aneoscalcentropy: aneoscalcentropy.o $(objects) $(fortran_objects) 
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 tipsy_iphase_array: tipsy_iphase_array.o $(objects) $(fortran_objects) tipsy.o 

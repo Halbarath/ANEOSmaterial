@@ -163,6 +163,12 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 		assert(0);
 		}
 	}
+    
+    if (fread(material->matstring, sizeof(material->matstring), 1, file)==0)
+	{
+        fprintf(stderr, "No material string given in %s\n", inputfile);
+        strcpy(material->matstring, "No material string given");
+	}
 	
 	fclose(file);
 
@@ -490,17 +496,11 @@ double ANEOSdPdTofRhoT(ANEOSMATERIAL *material, double rho, double T)
 	return dPdT;
 }
 
-void ANEOSMatString(ANEOSMATERIAL *material, char *MatName)
-{
-	strcpy(MatName, material->matName);
-}
-
 void ANEOSPrintMat(ANEOSMATERIAL *material, FILE *fp)
 {
-	char MatName[256];
-	ANEOSMatString(material, MatName);
-	fprintf(fp,"# Material: %i (%s)\n", material->iMat, MatName);
+	fprintf(fp,"# Material: %i (%s)\n", material->iMat, material->matName);
 	fprintf(fp,"# Reference density rho0: %g\n", material->rho0/material->CodeUnitstoCGSforRho);
 	fprintf(fp,"# Table size: nRho = %d, nT = %d\n", material->nRho, material->nT);
     fprintf(fp,"# Table boundaries (cgs units): minRho = %g, maxRho = %g, minT = %g, maxT = %g\n",material->rhoAxis[0],material->rhoAxis[material->nRho-1],material->TAxis[0],material->TAxis[material->nT-1]);
+    fprintf(fp,"# %s\n",material->matstring);
 }

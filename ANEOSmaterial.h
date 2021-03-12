@@ -16,6 +16,7 @@ typedef struct ANEOSmaterial
 	int nRho; // Number of entries in the interpolation arrays in the rho dimension
 	int nT; // Number of entries in the interpolation arrays in the T dimension
 	char matName[256];
+    char matstring[1024];
 	
 	// unit conversion
 	double CodeUnitstoCGSforU;
@@ -69,5 +70,4 @@ double ANEOSdUdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSdPdRhoofRhoT(ANEOSMATERIAL *material, double rho, double T);
 double ANEOSdPdTofRhoT(ANEOSMATERIAL *material, double rho, double T);
 
-void ANEOSMatString(ANEOSMATERIAL *material, char *MatName);
 void ANEOSPrintMat(ANEOSMATERIAL *material, FILE *fp);
