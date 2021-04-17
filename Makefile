@@ -45,7 +45,7 @@ aneostableinfo: aneostableinfo.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 clean:
-	rm -f $(execs) $(objects) $(fortran_objects) $(mylibobjects)
+	rm -f $(execs) $(objects) $(fortran_objects) $(mylibobjects) *.o
 
 cleanall:
 	rm -f $(execs) aneos.output fort.22 *.txt *.mat *.o *.pdf
