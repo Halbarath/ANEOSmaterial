@@ -40,6 +40,9 @@ aneoscall: aneoscall.o $(objects) $(fortran_objects)
 
 tipsy_iphase_array: tipsy_iphase_array.o $(objects) $(fortran_objects) tipsy.o 
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+tipsy_ascii: tipsy_ascii.o $(objects) $(fortran_objects) tipsy.o 
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
     
 aneostableinfo: aneostableinfo.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
