@@ -7,7 +7,7 @@ fortran_objects = libaneos.o
 # Compile with MANEOS
 #fortran_objects = libmaneos.o
 
-execs = testANEOSmaterial writeANEOStable writePhase writePressureTable aneoscall tipsy_iphase_array aneostableinfo
+execs = testANEOSmaterial writeANEOStable writePhase writePressureTable aneoscall tipsy_iphase_array aneostableinfo tipsy_ascii
 
 # GNU Science library (uncomment if not needed)
 GSL_LIB = -lgsl -lgslcblas
