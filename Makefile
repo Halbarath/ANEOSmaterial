@@ -15,7 +15,7 @@ FC := gfortran
 
 CFLAGS ?= -O3 -Wall -std=c99
 
-FFLAGS ?= $(CFLAGS)
+FFLAGS ?= $(CFLAGS) -std=legacy
 LIBS ?= -lm -lgfortran $(GSL_LIB)
 
 default: 
