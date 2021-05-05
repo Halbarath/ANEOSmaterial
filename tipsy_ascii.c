@@ -197,7 +197,27 @@ int main(int argc, char **argv) {
 
     /* Read all particles. */
 	TipsyReadAll(in);
-    
+
+    /* Print a header. */
+    printf("#%14s", "iOrder");
+    printf("%15s", "x [cm]");
+    printf("%15s", "y [cm]");
+    printf("%15s", "z [cm]");
+    printf("%15s", "vx [cm/s]");
+    printf("%15s", "vy [cm/s]");
+    printf("%15s", "vz [cm/s]");
+    printf("%3s", "iMat");
+
+    printf("%15s", "mass [g]");
+    printf("%15s", "rho [g/cm^3]");
+    printf("%15s", "u [erg/g]");
+
+    printf("%15s", "T [K]");
+    printf("%15s", "P [erg/cm^3]");
+    printf("%15s", "s [erg/g]");
+    printf("%15s", "cv [erg/K/g]");
+
+
     for (i = 0; i < N; i++) {
         iMat = (int) in->gp[i].metals;
  
