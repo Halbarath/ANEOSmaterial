@@ -21,7 +21,7 @@
  *
  * Author:   Christian Reinhardt
  * Created:  17.04.2021
- * Modified:  
+ * Modified: 06.05.2021
  */
 #include <math.h>
 #include <stdio.h>
@@ -206,7 +206,7 @@ int main(int argc, char **argv) {
     printf("%15s", "vx [cm/s]");
     printf("%15s", "vy [cm/s]");
     printf("%15s", "vz [cm/s]");
-    printf("%3s", "iMat");
+    printf("%5s", "iMat");
 
     printf("%15s", "mass [g]");
     printf("%15s", "rho [g/cm^3]");
@@ -217,6 +217,12 @@ int main(int argc, char **argv) {
     printf("%15s", "s [erg/g]");
     printf("%15s", "cv [erg/K/g]");
 
+    //printf("%15s", "dPdT");
+    //printf("%15s", "dPdrho");
+    printf("%15s", "cs [cm/s]");
+    printf("%7s", "iPhase");
+
+    printf("\n");
 
     for (i = 0; i < N; i++) {
         iMat = (int) in->gp[i].metals;
@@ -263,7 +269,7 @@ int main(int argc, char **argv) {
             printf("%15.7E", in->gp[i].vel[j]*dKpcUnit*KPCCM/dSecUnit);
 
         /* Material id */
-        printf("%3i", (int) in->gp[i].metals);
+        printf("%5i", (int) in->gp[i].metals);
 
         printf("%15.7E", in->gp[i].mass*dMsolUnit*1.99e33);
         printf("%15.7E", in->gp[i].rho*dGmPerCcUnit);
@@ -273,14 +279,14 @@ int main(int argc, char **argv) {
         printf("%15.7E", p);
         printf("%15.7E", s);
         printf("%15.7E", cv);
-        printf("%15.7E", dPdT);
-        printf("%15.7E", dPdrho);
-        printf("%15.7E", fkros);
+        //printf("%15.7E", dPdT);
+        //printf("%15.7E", dPdrho);
+        //printf("%15.7E", fkros);
         printf("%15.7E", cs);
-        printf("%2i", iPhase);
-        printf("%15.7E", rhoL);
-        printf("%15.7E", rhoH);
-        printf("%15.7E", ion);
+        printf("%7i", iPhase);
+        //printf("%15.7E", rhoL);
+        //printf("%15.7E", rhoH);
+        //printf("%15.7E", ion);
 
         printf("\n");
     }
