@@ -42,7 +42,7 @@ libmaneos_objects = $(aneos_path)/ANDATA.o \
 	              $(aneos_path)/ANZRTR.o
 fortran_objects = $(libmaneos_objects) $(aneos_path)/ANEOSINIT.o
 
-execs = testANEOSmaterial writeANEOStable writePhase writePressureTable aneoscall tipsy_iphase_array aneostableinfo tipsy_ascii
+execs = testANEOSmaterial writeANEOStable writeMANEOStable writePhase writePressureTable aneoscall tipsy_iphase_array aneostableinfo tipsy_ascii
 
 # GNU Science library (uncomment if not needed)
 GSL_LIB = -lgsl -lgslcblas
@@ -50,7 +50,8 @@ FC := gfortran
 
 CFLAGS ?= -O3 -Wall -std=c99
 
-FFLAGS ?= $(CFLAGS) -std=legacy
+#FFLAGS ?= $(CFLAGS) -std=legacy
+FFLAGS = -O3
 LIBS ?= -lm -lgfortran $(GSL_LIB)
 
 default: 
@@ -62,6 +63,9 @@ testANEOSmaterial: testANEOSmaterial.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 	
 writeANEOStable: writeANEOStable.o $(objects) $(fortran_objects) 
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+writeMANEOStable: writeMANEOStable.o $(objects) $(fortran_objects) 
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 writePhase: writePhase.o $(objects) $(fortran_objects)
