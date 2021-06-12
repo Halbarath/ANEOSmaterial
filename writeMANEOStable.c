@@ -50,6 +50,7 @@ int main(int argc, char *argv[])
     fprintf(stderr, "iMat: %d rho0: %15.7E\n", iMat, rho0);
     fprintf(stderr, "inputfile: %s\n", inputfile);
     fprintf(stderr, "outputfile: %s\n", outputfile);
+    fprintf(stderr, "matstring: %s\n", matstring);
 
     fprintf(stderr, "Read axes file\n");
 
@@ -179,7 +180,7 @@ int main(int argc, char *argv[])
         fwrite(cArray[i], sizeof(cArray[i][0]), nRho, file);
     }
     
-    if (argc == 4) {
+    if (argc == 5) {
         fwrite(matstring, sizeof(matstring), 1, file);
     }
 
