@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
 
 	ANEOSMATERIAL *material;
 	
-	material = ANEOSinitMaterial(MAT_MANEOS_DUNITE, dKpcUnit, dMsolUnit);
+	material = ANEOSinitMaterial(MAT_ANEOS_DUNITE, dKpcUnit, dMsolUnit);
 	
 	double P = ANEOSPofRhoU(material, 8/material->CodeUnitstoCGSforRho, 1e12/material->CodeUnitstoCGSforU);
 	printf("Pressure %.15e\n", P*material->CodeUnitstoCGSforP);
