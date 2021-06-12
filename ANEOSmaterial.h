@@ -26,6 +26,14 @@
 #define ANEOS_VERSION_MINOR   0
 #define ANEOS_VERSION_PATCH   0
 
+#define MAT_ANEOS_ICE         52
+#define MAT_ANEOS_DUNITE      54
+#define MAT_ANEOS_IRON        55
+
+#define MAT_MANEOS_DUNITE     61
+#define MAT_MANEOS_FOSTERITE  62
+#define MAT_MANEOS_IRON       63
+
 typedef struct ANEOSmaterial
 {
 	int iMat; // Material number
