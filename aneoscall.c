@@ -32,9 +32,9 @@ int main(int argc, char **argv) {
     double rho;
     double T;
     int iMat;
-    char matFilename[256] = "aneos.input";
+    //char matFilename[256] = "aneos.input";
     // Uncomment below to use M-ANEOS
-    //char matFilename[256] = "maneos.in";
+    char matFilename[256] = "ANEOS.INPUT";
     double p;
     double u;
     double s;
