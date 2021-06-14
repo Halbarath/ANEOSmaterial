@@ -53,6 +53,9 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 		case MAT_MANEOS_DUNITE:
 			strcpy(inputfile, "MANEOStable_dunite.in");
 			break;
+		case MAT_MANEOS_FOSTERITE:
+			strcpy(inputfile, "MANEOStable_fosterite.in");
+			break;
 		default:
 			assert(0);
 	}
