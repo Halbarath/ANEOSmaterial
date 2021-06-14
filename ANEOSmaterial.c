@@ -38,9 +38,6 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 	
 	switch(iMat)
 	{
-		case 51:
-			strcpy(inputfile, "MANEOStable_water.in");
-			break;
 		case MAT_ANEOS_ICE:
 			strcpy(inputfile, "ANEOStable_ice.in");
 			break;
@@ -56,7 +53,7 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 		case MAT_MANEOS_FOSTERITE:
 			strcpy(inputfile, "MANEOStable_fosterite.in");
 			break;
-        case MAT_MANEOS_IRON:
+		case MAT_MANEOS_IRON:
 			strcpy(inputfile, "MANEOStable_iron.in");
 			break;
 		default:
