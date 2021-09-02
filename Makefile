@@ -61,7 +61,13 @@ all: default
 
 testANEOSmaterial: testANEOSmaterial.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
-	
+
+calcPressureRhoT: calcPressureRhoT.o $(mylibobjects)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+calcDensityPT: calcDensityPT.o $(mylibobjects)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 writeANEOStable: writeANEOStable.o $(objects) $(fortran_objects) 
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
