@@ -20,19 +20,21 @@
  *
  * Author:   Christian Reinhardt
  * Created:  12.06.2021
- * Modified:  
+ * Modified: 22.02.2021 
  */
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 #include "aneos.h"
 
 int main(int argc, char **argv) {
     double rho;
     double T;
-    int iMat;
-    char matFile[256];
+    /* In M-ANEOS files there is only one material per file. */
+    int iMat = 1;
+    char MatFile[256];
     double p;
     double u;
     double s;
@@ -53,14 +55,16 @@ int main(int argc, char **argv) {
 
     rho = atof(argv[1]);
     T = atof(argv[2]);
-    MatFile = argv[3];
+    strcpy(MatFile, argv[3]);
 
     assert(rho > 0.0);
     assert(T > 0.0);
+    assert(MatFile != NULL);
+
     assert(strlen(MatFile) > 0);
 
     fprintf(stderr, "ANEOS: Initializing material...\n");
-    initaneos(matFile);
+    initaneos(MatFile);
 
     callaneos_cgs(T, rho, iMat, &p, &u, &s, &cv, &dPdT, &dPdrho, &fkros, &cs, &iPhase, &rhoL, &rhoH,
                   &ion);
@@ -80,7 +84,7 @@ int main(int argc, char **argv) {
     printf("dPdrho = %15.7E\n", dPdrho);
     printf("fkros  = %15.7E\n", fkros);
     printf("cs     = %15.7E\n", cs);
-    printf("iPhase = %i\n", iPhase);
+    printf("iPhase = %15i\n", iPhase);
     printf("rhoL   = %15.7E\n", rhoL);
     printf("rhoH   = %15.7E\n", rhoH);
     printf("ion    = %15.7E\n", ion);
