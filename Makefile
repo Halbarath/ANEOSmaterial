@@ -86,6 +86,10 @@ writePressureTable: writePressureTable.o $(objects) $(fortran_objects)
 aneoscall: aneoscall.o $(objects) $(fortran_objects) 
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+# Direct call to M-ANEOS. Be sure to compile with the correct object files.
+maneoscall: maneoscall.o $(objects) $(fortran_objects) 
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 tipsy_iphase_array: tipsy_iphase_array.o $(objects) $(fortran_objects) tipsy.o 
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
