@@ -202,7 +202,6 @@ int main(int argc, char *argv[])
     strcpy(exoutputfile, outputfile);
     strcat(exoutputfile, "_ex");
 
-    /// Change file name
     file = fopen(exoutputfile, "wb");
 
     fwrite(&rho0, sizeof(rho0), 1, file);
