@@ -56,6 +56,10 @@ typedef struct ANEOSmaterial
 	double **pArray;
 	double **cArray;
 	double **sArray;
+    
+    // Optional array
+	int **iPhaseArray;
+
 } ANEOSMATERIAL;
 
 // Initialization and finalization
