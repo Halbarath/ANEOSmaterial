@@ -204,6 +204,15 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
 	
 	fclose(file);
 
+    /* Read extended EOS tables if they exists. */
+    char exinputfile[256];
+    strcpy(exinputfile, inputfile);
+    strcat(exinputfile, "_ex");
+
+    if (ANEOSReadExtendedTable(material, exinputfile)) {
+        fprintf(stderr, "No extended EOS tables found.\n");
+    }
+
 	return material;
 }
 
@@ -219,6 +228,16 @@ void ANEOSfinalizeMaterial(ANEOSMATERIAL *material)
 		free(material->cArray[i]); 
 		free(material->sArray[i]); 
 	}
+
+    /* Extended tables. */
+    if (material->PhaseArray != NULL) {
+        for (int i=0; i<material->nT; i++)
+        {
+            if (material->PhaseArray[i] != NULL)
+                free(material->PhaseArray[i]);
+        }
+    }
+
 	free(material->rhoAxis);
 	free(material->TAxis);
 	free(material->uArray);
@@ -226,6 +245,80 @@ void ANEOSfinalizeMaterial(ANEOSMATERIAL *material)
 	free(material->cArray);
 	free(material->sArray);
 	free(material);
+}
+
+/*
+ * Read an extended EOS table. */
+int ANEOSReadExtendedTable(ANEOSMATERIAL *material, char *inputfile)
+{
+	FILE *file;
+	int nRho;
+	int nT;
+
+    if (material == NULL) {
+        fprintf(stderr, "ANEOSReadExtendedTable: ANEOSmaterial not initialized.\n");
+        assert(0);
+    }
+
+	if ((file= fopen(inputfile, "rb")) == NULL)
+	{
+		fprintf(stderr, "ANEOSReadExtendedTable: Could not open file %s\n", inputfile);
+		return 1;
+	}
+
+    /* If the file exists we assume it should be readable. */
+	if (fread(&nRho, sizeof(nRho), 1, file)==0)
+	{
+		fprintf(stderr, "ANEOSReadExtendedTable: Failed to read from file %s\n", inputfile);
+		assert(0);
+	}
+	if (fread(&nT, sizeof(nT), 1, file)==0)
+	{
+		fprintf(stderr, "ANEOSReadExtendedTable: Failed to read from file %s\n", inputfile);
+		assert(0);
+	}
+
+    if ((material->nRho != nRho) || (material->nT != nT)) {
+		fprintf(stderr, "ANEOSReadExtendedTable: Inconsistent number of grid points.\n");
+        assert(0);
+    }
+
+	double *rhoAxis = (double *)malloc(sizeof(double)*nRho);
+	double *TAxis = (double *)malloc(sizeof(double)*nT);
+
+	int **PhaseArray = (int **)malloc(sizeof(double*)*nT);
+
+    for (int i=0; i<nT; i++)
+	{
+		PhaseArray[i] = (int *)malloc(nRho * sizeof(int)); 
+	}
+
+	material->PhaseArray = PhaseArray;
+
+	if (fread(rhoAxis, sizeof(rhoAxis[0]), nRho, file)==0)
+	{
+	    fprintf(stderr, "ANEOSReadExtendedTable: Failed to read from file %s\n", inputfile);
+	    assert(0);
+	}
+	
+	if (fread(TAxis, sizeof(TAxis[0]), nT, file)==0)
+	{
+	    fprintf(stderr, "ANEOSReadExtendedTable: Failed to read from file %s\n", inputfile);
+	    assert(0);
+	}
+	
+	for (int i=0; i< nT; i++)
+	{
+		if (fread(PhaseArray[i], sizeof(PhaseArray[i][0]), nRho, file)==0)
+		{
+		fprintf(stderr, "ANEOSReadExtendedTable: Failed to read from file %s\n", inputfile);
+		assert(0);
+		}
+	}
+	
+	fclose(file);
+
+    return 0;
 }
 
 /*

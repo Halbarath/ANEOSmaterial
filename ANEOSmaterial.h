@@ -58,7 +58,7 @@ typedef struct ANEOSmaterial
 	double **sArray;
     
     // Optional array
-	int **iPhaseArray;
+	int **PhaseArray;
 
 } ANEOSMATERIAL;
 
@@ -67,6 +67,8 @@ typedef struct ANEOSmaterial
 ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit);
 ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcUnit, double dMsolUnit);
 void ANEOSfinalizeMaterial(ANEOSMATERIAL *material);
+
+int ANEOSReadExtendedTable(ANEOSMATERIAL *material, char *inputfile);
 
 // Access functions
 
