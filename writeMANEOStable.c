@@ -204,7 +204,6 @@ int main(int argc, char *argv[])
 
     file = fopen(exoutputfile, "wb");
 
-    fwrite(&rho0, sizeof(rho0), 1, file);
     fwrite(&nRho, sizeof(nRho), 1, file);
     fwrite(&nT, sizeof(nT), 1, file);
 
