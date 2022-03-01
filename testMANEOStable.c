@@ -31,7 +31,7 @@
 
 int main(int argc, char *argv[])
 {
-    ANEOSmaterial *mat;
+    ANEOSmaterial *Mat;
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
     char inputfile[256] = "";
@@ -53,9 +53,10 @@ int main(int argc, char *argv[])
     
     fprintf(stderr, "Initialize ANEOSmaterial with iMat: %i\n", iMat);
 	Mat = ANEOSinitMaterial(iMat, dKpcUnit, dMsolUnit);	
-    ANEOSPrintMat(material, stderr);
+    ANEOSPrintMat(Mat, stderr);
     fprintf(stderr, "\n");
 
+#if 0
     /* Convert all data to cgs. */
     for (int i=0; i<Mat->nT; i++) {
         for (int j=0; j<nRho; j++) {
@@ -82,8 +83,9 @@ int main(int argc, char *argv[])
             rhoArray[i][j] = rho;
         }
     }
+#endif
 
-	ANEOSfinalizeMaterial(material);
+	ANEOSfinalizeMaterial(Mat);
 
     fprintf(stderr, "Finished, exiting\n");
     return 0;
