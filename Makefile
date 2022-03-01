@@ -62,6 +62,9 @@ all: default
 testANEOSmaterial: testANEOSmaterial.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+testMANEOStable: testMANEOStable.o $(mylibobjects)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 calcPressureRhoT: calcPressureRhoT.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
