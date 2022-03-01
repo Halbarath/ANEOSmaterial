@@ -59,7 +59,7 @@ default:
 
 all: default
 
-testANEOSmaterial: testANEOSmaterial.o $(mylibobjects)
+testANEOSmaterial: testANEOSmaterial.o $(mylibobjects) $(fortran_objects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 testMANEOStable: testMANEOStable.o $(mylibobjects)
