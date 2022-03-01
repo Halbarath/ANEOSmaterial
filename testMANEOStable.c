@@ -35,8 +35,6 @@ int main(int argc, char *argv[])
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
     char inputfile[256] = "";
-    /* Assume that each M-ANEOS input file only contains one material.*/
-    int iMatMANEOS = 1;
     int iMat;
 
     if (argc != 3) {
