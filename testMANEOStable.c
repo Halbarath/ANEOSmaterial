@@ -55,6 +55,12 @@ int main(int argc, char *argv[])
     ANEOSPrintMat(Mat, stderr);
     fprintf(stderr, "\n");
 
+    fprintf(stderr, "CodeUnitstoCGSforRho = %15.7E\n", Mat->CodeUnitstoCGSforRho);
+    fprintf(stderr, "CodeUnitstoCGSforU   = %15.7E\n", Mat->CodeUnitstoCGSforU);
+    fprintf(stderr, "CodeUnitstoCGSforP   = %15.7E\n", Mat->CodeUnitstoCGSforP);
+    fprintf(stderr, "CodeUnitstoCGSforC   = %15.7E\n", Mat->CodeUnitstoCGSforC);
+    fprintf(stderr, "\n");
+
 #if 0
     /* Convert all data to cgs. */
     for (int i=0; i<Mat->nT; i++) {
