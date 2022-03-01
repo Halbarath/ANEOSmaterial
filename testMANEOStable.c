@@ -33,8 +33,9 @@
 int main(int argc, char *argv[])
 {
     ANEOSMATERIAL *Mat;
-	double dKpcUnit = 2.06701e-13;
-	double dMsolUnit = 4.80438e-08;
+    /* Use cgs units. */
+	double dKpcUnit = 0.0;
+	double dMsolUnit = 0.0;
     char inputfile[256] = "";
     int iMat;
 
@@ -62,19 +63,6 @@ int main(int argc, char *argv[])
     fprintf(stderr, "\n");
 
 #if 0
-    /* Convert all data to cgs. */
-    for (int i=0; i<Mat->nT; i++) {
-        for (int j=0; j<nRho; j++) {
-            rho = Mat->rhoAxis[j]*;
-
-            callaneos_cgs(T, rho, iMat, &pArray[i][j], &uArray[i][j], &sArray[i][j], &cv, &dPdT,
-                    &dPdrho, &fkros, &cArray[i][j], &PhaseArray[i][j], &rhoL, &rhoH, &ion);
-
-            TArray[i][j] = T;
-            rhoArray[i][j] = rho;
-        }
-    }
-
     /* Check if the data agree. */
     for (int i=0; i<Mat->nT; i++) {
         for (int j=0; j<nRho; j++) {
