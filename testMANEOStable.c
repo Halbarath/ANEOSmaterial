@@ -31,7 +31,7 @@
 
 int main(int argc, char *argv[])
 {
-    ANEOSmaterial *Mat;
+    ANEOSMATERIAL *Mat;
 	double dKpcUnit = 2.06701e-13;
 	double dMsolUnit = 4.80438e-08;
     char inputfile[256] = "";
@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
 
     strcpy(inputfile, argv[1]);
     iMat = atoi(argv[2]); 
-    assert(iMat >= 0)
+    assert(iMat >= 0);
 
     fprintf(stderr, "Initialize M-ANEOS with input file: %s\n", inputfile);
     initaneos(inputfile);
