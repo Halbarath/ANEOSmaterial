@@ -184,14 +184,7 @@ int main(int argc, char *argv[])
     fclose(fp);
 
     fp = fopen("diff_u.txt", "w");
-
-    for (int i=0; i<Mat->nT; i++) {
-        for (int j=1; j<Mat->nRho; j++) {
-            fprintf(fp, "%15.7E", uDiff[i][j]);
-        }
-        fprintf(fp, "\n");
-    }
-
+    PrintArrayDouble(uDiff, Mat->nRho, Mat->nT, fp);
     fclose(fp);
 
     /* Print extended EOS tables. */
