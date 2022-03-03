@@ -30,6 +30,26 @@
 #include "ANEOSmaterial.h"
 #include "aneos.h"
 
+int PrintArrayInt(int **Array, int nRho, int nT, FILE *fp) {
+    if (Array == NULL)
+        return 1;
+
+    if (fp == NULL)
+        return 1;
+    
+    if ((nRho < 1) || (nT < 1))
+        return 1;
+    
+    for (int i=0; i<nT; i++) {
+        for (int j=1; j<nRho; j++) {
+            fprintf(fp, "%4i", Array[i][j]);
+        }
+        fprintf(fp, "\n");
+    }
+
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     ANEOSMATERIAL *Mat;
@@ -164,14 +184,7 @@ int main(int argc, char *argv[])
     /* Print extended EOS tables. */
     if (Mat->PhaseArray != NULL) {
         fp = fopen("diff_phase.txt", "w");
-
-        for (int i=0; i<Mat->nT; i++) {
-            for (int j=1; j<Mat->nRho; j++) {
-                fprintf(fp, "%4i", PhaseDiff[i][j]);
-            }
-            fprintf(fp, "\n");
-        }
-
+        PrintArrayInt(PhaseDiff, Mat->nRho, Mat->nT, fp);
         fclose(fp);
     }
 
