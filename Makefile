@@ -65,6 +65,9 @@ testANEOSmaterial: testANEOSmaterial.o $(mylibobjects)
 testMANEOStable: testMANEOStable.o $(mylibobjects) $(fortran_objects) $(objects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+testMANEOStableint: testMANEOStableint.o $(mylibobjects) $(fortran_objects) $(objects)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 calcPressureRhoT: calcPressureRhoT.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
