@@ -30,6 +30,26 @@
 #include "ANEOSmaterial.h"
 #include "aneos.h"
 
+int PrintArrayDouble(double **Array, int nRho, int nT, FILE *fp) {
+    if (Array == NULL)
+        return 1;
+
+    if (fp == NULL)
+        return 1;
+    
+    if ((nRho < 1) || (nT < 1))
+        return 1;
+
+    for (int i=0; i<nT; i++) {
+        for (int j=1; j<nRho; j++) {
+            fprintf(fp, "%15.7E", Array[i][j]);
+        }
+        fprintf(fp, "\n");
+    }
+
+    return 0;
+}
+
 int PrintArrayInt(int **Array, int nRho, int nT, FILE *fp) {
     if (Array == NULL)
         return 1;
@@ -160,14 +180,7 @@ int main(int argc, char *argv[])
 
     /* Print differences to a file. */
     fp = fopen("diff_press.txt", "w");
-
-    for (int i=0; i<Mat->nT; i++) {
-        for (int j=1; j<Mat->nRho; j++) {
-            fprintf(fp, "%15.7E", pDiff[i][j]);
-        }
-        fprintf(fp, "\n");
-    }
-
+    PrintArrayDouble(pDiff, Mat->nRho, Mat->nT, fp);
     fclose(fp);
 
     fp = fopen("diff_u.txt", "w");
