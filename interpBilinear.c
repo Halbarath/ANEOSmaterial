@@ -151,6 +151,62 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 }
 
 /*
+ * Interpolate a value using nearest neighbor interpolation
+ */
+double interpolateValueNearest(double rho, double T, int nT, int nRho, double* rhoAxis,
+        double* TAxis, double** zArray)
+{
+    // check if (rho,T) is out of bounds
+    if (rho < rhoAxis[0])
+    {
+#ifdef EOSLIB_VERBOSE
+        fprintf(stderr,"ANEOS interpolateValueBilinear failed, rho = %.15e is smaller than minRho = %.15e\n", rho, rhoAxis[0]);
+#endif
+        return -1e50;
+    }
+    if (rho >= rhoAxis[nRho-1])
+    {
+#ifdef EOSLIB_VERBOSE
+        fprintf(stderr,"ANEOS interpolateValueBilinear failed, rho = %.15e is larger than maxRho = %.15e\n", rho, rhoAxis[nRho-1]);
+#endif
+        return -1e50;
+    }
+    if (T < TAxis[0])
+    {
+#ifdef EOSLIB_VERBOSE
+        fprintf(stderr,"ANEOS interpolateValueBilinear failed, T = %.15e is smaller than minT = %.15e\n", T, TAxis[0]);
+#endif
+        return -1e50;
+    }
+    if (T >= TAxis[nT-1])
+    {
+#ifdef EOSLIB_VERBOSE
+        fprintf(stderr,"ANEOS interpolateValueBilinear failed, T = %.15e is larger than maxT = %.15e\n", T, TAxis[nT-1]);
+#endif
+        return -1e50;
+    }
+
+    // searching for grid rectangle containing the point
+    // could be calculated if grid is guarantied to be logarithmic
+    // as we do not assume that, we search for the grid rectangle
+    int i=findIndex(rho, rhoAxis, nRho);
+
+    int j=findIndex(T, TAxis, nT);
+
+    // scaling grid rectangle to unit square
+    double x=(rho-rhoAxis[i])/(rhoAxis[i+1]-rhoAxis[i]);
+    double y=(T-TAxis[j])/(TAxis[j+1]-TAxis[j]);
+
+    // calculating bilinear interpolation
+    double f00=zArray[j][i];
+    double f01=zArray[j+1][i];
+    double f10=zArray[j][i+1];
+    double f11=zArray[j+1][i+1];
+
+}
+
+
+/*
  * Interpolate a value using bilinear interpolation
  */
 double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* rhoAxis,
