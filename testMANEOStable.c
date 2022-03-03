@@ -33,11 +33,30 @@
 int main(int argc, char *argv[])
 {
     ANEOSMATERIAL *Mat;
-    /* Use cgs units. */
-	double dKpcUnit = 0.0;
-	double dMsolUnit = 0.0;
     char inputfile[256] = "";
     int iMat;
+    double rho;
+    double T;
+    /* Values returned by ANEOS. */
+    double P;
+    double u;
+    double s;
+    double cv;
+    double dPdT;
+    double dPdrho;
+    double fkros;
+    double cs;
+    int Phase;
+    double rhoL;
+    double rhoH;
+    double ion;
+    /* Store differences. */
+    double **pDiff;
+    double **uDiff;
+    double **sDiff;
+    double **cDiff;
+    double eps = 1e-6;
+    FILE *fp;
 
     if (argc != 3) {
         fprintf(stderr,"Usage: testMANEOStable <inputfile> <iMat>\n");
@@ -52,7 +71,8 @@ int main(int argc, char *argv[])
     initaneos(inputfile);
     
     fprintf(stderr, "Initialize ANEOSmaterial with iMat: %i\n", iMat);
-	Mat = ANEOSinitMaterial(iMat, dKpcUnit, dMsolUnit);	
+    /* Use cgs units. */
+	Mat = ANEOSinitMaterial(iMat, 0.0, 0.0);
     ANEOSPrintMat(Mat, stderr);
     fprintf(stderr, "\n");
 
@@ -62,22 +82,77 @@ int main(int argc, char *argv[])
     fprintf(stderr, "CodeUnitstoCGSforC   = %15.7E\n", Mat->CodeUnitstoCGSforC);
     fprintf(stderr, "\n");
 
-#if 0
+    /* Allocate memory. */
+    pDiff = (double **)malloc(sizeof(double*)*Mat->nT);
+    uDiff = (double **)malloc(sizeof(double*)*Mat->nT);
+    sDiff = (double **)malloc(sizeof(double*)*Mat->nT);
+    cDiff = (double **)malloc(sizeof(double*)*Mat->nT);
+
+    for (int i=0; i<Mat->nT; i++)
+    {
+        pDiff[i] = (double *)malloc(Mat->nRho * sizeof(double));
+        uDiff[i] = (double *)malloc(Mat->nRho * sizeof(double));
+        sDiff[i] = (double *)malloc(Mat->nRho * sizeof(double));
+        cDiff[i] = (double *)malloc(Mat->nRho * sizeof(double));
+    }
+
+
     /* Check if the data agree. */
     for (int i=0; i<Mat->nT; i++) {
-        for (int j=0; j<nRho; j++) {
-            T = TAxis[i];
-            rho = rhoAxis[j];
+        for (int j=1; j<Mat->nRho; j++) {
+            T = Mat->TAxis[i];
+            rho = Mat->rhoAxis[j];
 
-            callaneos_cgs(T, rho, iMat, &pArray[i][j], &uArray[i][j], &sArray[i][j], &cv, &dPdT,
-                    &dPdrho, &fkros, &cArray[i][j], &PhaseArray[i][j], &rhoL, &rhoH, &ion);
+            /* Assume that only one material is stored in an M-ANEOS input file. */
+            callaneos_cgs(T, rho, 1, &P, &u, &s, &cv, &dPdT, &dPdrho, &fkros, &cs,
+                          &Phase, &rhoL, &rhoH, &ion);
 
-            TArray[i][j] = T;
-            rhoArray[i][j] = rho;
+            pDiff[i][j] = fabs((P-Mat->pArray[i][j])/P);
+            uDiff[i][j] = fabs((u-Mat->uArray[i][j])/u);
+            sDiff[i][j] = fabs((s-Mat->sArray[i][j])/s);
+            cDiff[i][j] = fabs((cs-Mat->cArray[i][j])/cs);
+
+#if 0
+            if (dDiffP >= eps)
+                fprintf(stderr, "rho= %g T= %g P= %g %g dDiffP= %g\n", rho, T, P, Mat->pArray[i][j], dDiffP);
+
+            if (dDiffu >= eps)
+                fprintf(stderr, "rho= %g T= %g u= %g %g dDiffu= %g\n", rho, T, u, Mat->uArray[i][j], dDiffu);
+
+            assert(dDiffP < eps);
+            assert(dDiffu < eps);
+            assert(dDiffs < eps);
+            assert(dDiffcs < eps);
+#endif
+            //PhaseArray[i][j]
         }
     }
-#endif
 
+    /* Print differences to a file. */
+    fp = fopen("diff_press.txt", "w");
+
+    for (int i=0; i<Mat->nT; i++) {
+        for (int j=1; j<Mat->nRho; j++) {
+            fprintf(fp, "%15.7E", pDiff[i][j]);
+        }
+        fprintf(fp, "\n");
+    }
+
+    fclose(fp);
+
+    fp = fopen("diff_u.txt", "w");
+
+    for (int i=0; i<Mat->nT; i++) {
+        for (int j=1; j<Mat->nRho; j++) {
+            fprintf(fp, "%15.7E", uDiff[i][j]);
+        }
+        fprintf(fp, "\n");
+    }
+
+    fclose(fp);
+
+
+    /* Free memory. */
 	ANEOSfinalizeMaterial(Mat);
 
     fprintf(stderr, "Finished, exiting\n");
