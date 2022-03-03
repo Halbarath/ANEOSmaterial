@@ -55,6 +55,8 @@ int main(int argc, char *argv[])
     double **uDiff;
     double **sDiff;
     double **cDiff;
+    /* Extended EOS tables. */
+    int **PhaseDiff;
     double eps = 1e-6;
     FILE *fp;
 
@@ -88,12 +90,16 @@ int main(int argc, char *argv[])
     sDiff = (double **)malloc(sizeof(double*)*Mat->nT);
     cDiff = (double **)malloc(sizeof(double*)*Mat->nT);
 
+    PhaseDiff = (int **)malloc(sizeof(int*)*Mat->nT);
+
     for (int i=0; i<Mat->nT; i++)
     {
         pDiff[i] = (double *)malloc(Mat->nRho * sizeof(double));
         uDiff[i] = (double *)malloc(Mat->nRho * sizeof(double));
         sDiff[i] = (double *)malloc(Mat->nRho * sizeof(double));
         cDiff[i] = (double *)malloc(Mat->nRho * sizeof(double));
+
+        PhaseDiff[i] = (int *)malloc(Mat->nRho * sizeof(int));
     }
 
 
@@ -112,6 +118,10 @@ int main(int argc, char *argv[])
             sDiff[i][j] = fabs((s-Mat->sArray[i][j])/s);
             cDiff[i][j] = fabs((cs-Mat->cArray[i][j])/cs);
 
+            /* Check extended EOS tables. */
+            if (Mat->PhaseArray != NULL)
+                PhaseDiff[i][j] = fabs((Phase-Mat->PhaseArray[i][j])/Phase);
+ 
 #if 0
             if (dDiffP >= eps)
                 fprintf(stderr, "rho= %g T= %g P= %g %g dDiffP= %g\n", rho, T, P, Mat->pArray[i][j], dDiffP);
@@ -151,6 +161,19 @@ int main(int argc, char *argv[])
 
     fclose(fp);
 
+    /* Print extended EOS tables. */
+    if (Mat->PhaseArray != NULL) {
+        fp = fopen("diff_phase.txt", "w");
+
+        for (int i=0; i<Mat->nT; i++) {
+            for (int j=1; j<Mat->nRho; j++) {
+                fprintf(fp, "%4i", PhaseDiff[i][j]);
+            }
+            fprintf(fp, "\n");
+        }
+
+        fclose(fp);
+    }
 
     /* Free memory. */
 	ANEOSfinalizeMaterial(Mat);
