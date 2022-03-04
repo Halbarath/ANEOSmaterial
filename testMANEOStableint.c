@@ -90,6 +90,9 @@ int main(int argc, char *argv[])
     double rhoL;
     double rhoH;
     double ion;
+    /* Axis for interpolation. */
+    double *rhoAxisInt;
+    double *TAxisInt;
     /* Store differences. */
     double **pDiff;
     double **uDiff;
@@ -97,7 +100,9 @@ int main(int argc, char *argv[])
     double **cDiff;
     /* Extended EOS tables. */
     int **PhaseDiff;
-    /* Interpolate between two grid points. */
+    /* Number of grid points on the interpolated grid. */
+    int nGridT;
+    int nGridRho;
     int nSteps = 5;
     double eps = 1e-6;
     FILE *fp;
@@ -126,65 +131,78 @@ int main(int argc, char *argv[])
     fprintf(stderr, "CodeUnitstoCGSforC   = %15.7E\n", Mat->CodeUnitstoCGSforC);
     fprintf(stderr, "\n");
 
+    nGridRho = nSteps*(Mat->nRho-1);
+    nGridT = nSteps*(Mat->nT-1);
+    fprintf(stderr, "nGridRho = %i nGridT = %i\n", nGridRho, nGridT);
+    
     /* Allocate memory. */
-    pDiff = (double **)malloc(sizeof(double*)*Mat->nT);
-    uDiff = (double **)malloc(sizeof(double*)*Mat->nT);
-    sDiff = (double **)malloc(sizeof(double*)*Mat->nT);
-    cDiff = (double **)malloc(sizeof(double*)*Mat->nT);
+    rhoAxisInt = (double *)malloc(nGridRho * sizeof(double));
+    TAxisInt = (double *)malloc(nGridT * sizeof(double));
+
+    pDiff = (double **)malloc(sizeof(double*)*nGridT);
+    uDiff = (double **)malloc(sizeof(double*)*nGridT);
+    sDiff = (double **)malloc(sizeof(double*)*nGridT);
+    cDiff = (double **)malloc(sizeof(double*)*nGridT);
 
     PhaseDiff = (int **)malloc(sizeof(int*)*Mat->nT);
 
     for (int i=0; i<Mat->nT; i++)
     {
-        pDiff[i] = (double *)malloc(Mat->nRho * sizeof(double));
-        uDiff[i] = (double *)malloc(Mat->nRho * sizeof(double));
-        sDiff[i] = (double *)malloc(Mat->nRho * sizeof(double));
-        cDiff[i] = (double *)malloc(Mat->nRho * sizeof(double));
+        pDiff[i] = (double *)malloc(nGridRho * sizeof(double));
+        uDiff[i] = (double *)malloc(nGridRho * sizeof(double));
+        sDiff[i] = (double *)malloc(nGridRho * sizeof(double));
+        cDiff[i] = (double *)malloc(nGridRho * sizeof(double));
 
-        PhaseDiff[i] = (int *)malloc(Mat->nRho * sizeof(int));
+        PhaseDiff[i] = (int *)malloc(nGridRho * sizeof(int));
     }
 
-#if 0
-    /* Check if the data agree. */
-    int nTArray = 0;
-    for (int i=0; i<Mat->nT-1; i++) {
-        for (int k=0; k<nSteps; k++) {
-            T = Mat->TAxis[i] + k*(Mat->TAxis[i+1]-Mat->TAxis[i])/(nSteps-1);
-
-            fprintf(stderr, "T_i= %15.7E T_i+1= %15.7E T=%15.7E\n", Mat->TAxis[i], Mat->TAxis[i+1], T);
-            nTArray++;
-        }
+    /* Generate rho and T axis for interpolation. */
+    for (int i=0; i<nGridT; i++) {
+        T = Mat->TAxis[0] + i*(Mat->TAxis[Mat->nT-1]-Mat->TAxis[0])/(nGridT-1);
+        TAxisInt[i] = T;
     }
 
-    fprintf(stderr, "nTArray = %i nT= %i nSteps= %i\n", nTArray, Mat->nT, nSteps);
-    fprintf(stderr, "T_min = %15.7E T_max = %15.7E\n", Mat->TAxis[0], Mat->TAxis[Mat->nT-1]);
-
-    int nRhoArray = 0;
-    for (int j=0; j<Mat->nRho-1; j++) {
-        for (int l=0; l<nSteps; l++) {
-            rho = Mat->rhoAxis[j] + l*(Mat->rhoAxis[j+1]-Mat->rhoAxis[j])/(nSteps-1);
-
-            fprintf(stderr, "rho_j= %15.7E rho_j+1= %15.7E rho=%15.7E\n", Mat->rhoAxis[j], Mat->rhoAxis[j+1], rho);
-            nRhoArray++;
-        }
+    for (int j=0; j<nGridRho; j++) {
+        rho = Mat->rhoAxis[0] + j*(Mat->rhoAxis[Mat->nRho-1]-Mat->rhoAxis[0])/(nGridRho-1);
+        rhoAxisInt[j] = rho;
     }
 
-    fprintf(stderr, "nRhoArray = %i nRho= %i nSteps= %i\n", nRhoArray, Mat->nRho, nSteps);
-    fprintf(stderr, "rho_min = %15.7E rho_max = %15.7E\n", Mat->rhoAxis[0], Mat->rhoAxis[Mat->nRho-1]);
-#endif
+    /* Write axis to a file. */
+    fp = fopen("T_axis_int.txt", "w");
 
-    for (int i=0; i<Mat->nT-1; i++) {
-        for (int k=0; k<nSteps; k++) {
-            T = Mat->TAxis[i] + k*(Mat->TAxis[i+1]-Mat->TAxis[i])/(nSteps-1);
+    for (int i=0; i<nGridT; i++) {
+        fprintf(fp, "%15.7E\n", TAxisInt[i]);
+    }
 
-            for (int j=0; j<Mat->nRho-1; j++) {
-                for (int l=0; l<nSteps; l++) {
-                    rho = Mat->rhoAxis[j] + l*(Mat->rhoAxis[j+1]-Mat->rhoAxis[j])/(nSteps-1);
+    fclose(fp);
 
-                    /* Assume that only one material is stored in an M-ANEOS input file. */
-                    callaneos_cgs(T, rho, 1, &P, &u, &s, &cv, &dPdT, &dPdrho, &fkros, &cs,
-                                  &Phase, &rhoL, &rhoH, &ion);
+    fp = fopen("rho_axis_int.txt", "w");
 
+    for (int j=0; j<nGridRho; j++) {
+        fprintf(fp, "%15.7E\n", rhoAxisInt[j]);
+    }
+
+    fclose(fp);
+
+    /* Do not include the end points of the EOS table because interpolation fails there. */
+    for (int i=0; i<nGridT-1; i++) {
+        for (int j=0; j<nGridRho-1; j++) {
+            T = TAxisInt[i];
+            rho = rhoAxisInt[j];
+
+            /* Assume that only one material is stored in an M-ANEOS input file. */
+            callaneos_cgs(T, rho, 1, &P, &u, &s, &cv, &dPdT, &dPdrho, &fkros, &cs,
+                          &Phase, &rhoL, &rhoH, &ion);
+            
+            double err;
+
+            if (P < 1) {
+                err = -1;
+            } else {
+                err = fabs((ANEOSPofRhoT(Mat, rho, T)-P)/P);
+            }
+
+            printf("%15.7E", err);
 #if 0
                 pDiff[i][j] = fabs((P-Mat->pArray[i][j])/P);
                 uDiff[i][j] = fabs((u-Mat->uArray[i][j])/u);
@@ -196,9 +214,8 @@ int main(int argc, char *argv[])
                     PhaseDiff[i][j] = fabs((Phase-Mat->PhaseArray[i][j])/Phase);
 #endif
                     //fprintf(stderr, "rho = %15.7E T = %15.7E\n", rho, T);
-                }
             }
-        }
+        printf("\n");
     }
 
     exit(1);
