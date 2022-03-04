@@ -161,20 +161,6 @@ int main(int argc, char *argv[])
             /* Check extended EOS tables. */
             if (Mat->PhaseArray != NULL)
                 PhaseDiff[i][j] = fabs((Phase-Mat->PhaseArray[i][j])/Phase);
- 
-#if 0
-            if (dDiffP >= eps)
-                fprintf(stderr, "rho= %g T= %g P= %g %g dDiffP= %g\n", rho, T, P, Mat->pArray[i][j], dDiffP);
-
-            if (dDiffu >= eps)
-                fprintf(stderr, "rho= %g T= %g u= %g %g dDiffu= %g\n", rho, T, u, Mat->uArray[i][j], dDiffu);
-
-            assert(dDiffP < eps);
-            assert(dDiffu < eps);
-            assert(dDiffs < eps);
-            assert(dDiffcs < eps);
-#endif
-            //PhaseArray[i][j]
         }
     }
 
