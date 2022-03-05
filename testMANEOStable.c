@@ -142,7 +142,23 @@ int main(int argc, char *argv[])
         PhaseDiff[i] = (int *)malloc(Mat->nRho * sizeof(int));
     }
 
+    /* Write axis to a file. */
+    fp = fopen("T_axis.txt", "w");
 
+    for (int i=0; i<Mat->nT; i++) {
+        fprintf(fp, "%15.7E\n", Mat->TAxis[i]);
+    }
+
+    fclose(fp);
+
+    fp = fopen("rho_axis.txt", "w");
+
+    for (int j=0; j<Mat->nRho; j++) {
+        fprintf(fp, "%15.7E\n", Mat->rhoAxis[j]);
+    }
+
+    fclose(fp);
+    
     /* Check if the data agree. */
     for (int i=0; i<Mat->nT; i++) {
         for (int j=1; j<Mat->nRho; j++) {
@@ -159,8 +175,13 @@ int main(int argc, char *argv[])
             cDiff[i][j] = fabs((cs-Mat->cArray[i][j])/cs);
 
             /* Check extended EOS tables. */
-            if (Mat->PhaseArray != NULL)
-                PhaseDiff[i][j] = fabs((Phase-Mat->PhaseArray[i][j])/Phase);
+            if (Mat->PhaseArray != NULL) {
+                if (Mat->PhaseArray[i][j] == Phase) {
+                    PhaseDiff[i][j] = 0;
+                } else {
+                    PhaseDiff[i][j] = 1;
+                }
+            }
         }
     }
 
