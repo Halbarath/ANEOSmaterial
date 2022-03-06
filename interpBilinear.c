@@ -153,8 +153,8 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 /*
  * Interpolate a value using nearest neighbor interpolation
  */
-double interpolateValueNearest(double rho, double T, int nT, int nRho, double* rhoAxis,
-        double* TAxis, double** zArray)
+int interpolateValueNearest(double rho, double T, int nT, int nRho, double* rhoAxis,
+        double* TAxis, int** zArray)
 {
     // check if (rho,T) is out of bounds
     if (rho < rhoAxis[0])
@@ -162,28 +162,28 @@ double interpolateValueNearest(double rho, double T, int nT, int nRho, double* r
 #ifdef EOSLIB_VERBOSE
         fprintf(stderr,"ANEOS interpolateValueBilinear failed, rho = %.15e is smaller than minRho = %.15e\n", rho, rhoAxis[0]);
 #endif
-        return -1e50;
+        return -1;
     }
     if (rho >= rhoAxis[nRho-1])
     {
 #ifdef EOSLIB_VERBOSE
         fprintf(stderr,"ANEOS interpolateValueBilinear failed, rho = %.15e is larger than maxRho = %.15e\n", rho, rhoAxis[nRho-1]);
 #endif
-        return -1e50;
+        return -1;
     }
     if (T < TAxis[0])
     {
 #ifdef EOSLIB_VERBOSE
         fprintf(stderr,"ANEOS interpolateValueBilinear failed, T = %.15e is smaller than minT = %.15e\n", T, TAxis[0]);
 #endif
-        return -1e50;
+        return -1;
     }
     if (T >= TAxis[nT-1])
     {
 #ifdef EOSLIB_VERBOSE
         fprintf(stderr,"ANEOS interpolateValueBilinear failed, T = %.15e is larger than maxT = %.15e\n", T, TAxis[nT-1]);
 #endif
-        return -1e50;
+        return -1;
     }
 
     // searching for grid rectangle containing the point
@@ -198,10 +198,10 @@ double interpolateValueNearest(double rho, double T, int nT, int nRho, double* r
     double y=(T-TAxis[j])/(TAxis[j+1]-TAxis[j]);
 
     // calculating bilinear interpolation
-    double f00=zArray[j][i];
-    double f01=zArray[j+1][i];
-    double f10=zArray[j][i+1];
-    double f11=zArray[j+1][i+1];
+    int f00=zArray[j][i];
+    int f01=zArray[j+1][i];
+    int f10=zArray[j][i+1];
+    int f11=zArray[j+1][i+1];
     
     if ((x <= 0.5) && (y <= 0.5)) {
         return f00;
@@ -209,8 +209,12 @@ double interpolateValueNearest(double rho, double T, int nT, int nRho, double* r
         return f01;
     } else if ((x > 0.5) && (y <= 0.5)) {
         return f10;
-    } else {
+    } else if ((x > 0.5) && (y > 0.5)) {
         return f11;
+    } else {
+        //return f11;
+        fprintf(stderr, "x= %g y= %g\n", x, y);
+        exit(1);
     }
 }
 
