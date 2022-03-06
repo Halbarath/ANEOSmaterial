@@ -56,6 +56,10 @@ typedef struct ANEOSmaterial
 	double **pArray;
 	double **cArray;
 	double **sArray;
+    
+    // Optional array
+	int **PhaseArray;
+
 } ANEOSMATERIAL;
 
 // Initialization and finalization
@@ -63,6 +67,8 @@ typedef struct ANEOSmaterial
 ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit);
 ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcUnit, double dMsolUnit);
 void ANEOSfinalizeMaterial(ANEOSMATERIAL *material);
+
+int ANEOSReadExtendedTable(ANEOSMATERIAL *material, char *inputfile);
 
 // Access functions
 
@@ -86,6 +92,10 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u);
 
 double ANEOSCofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T);
+
+// These functions are for extended EOS tables.
+int ANEOSPhaseofRhoU(ANEOSMATERIAL *material, double rho, double u);
+int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T);
 
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2);
 

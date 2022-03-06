@@ -43,7 +43,7 @@ void initaneos(char *matFilename) {
 	}
 
 	bANEOSInitialized = TRUE;
-	fprintf(stderr,"Initializing ANEOS with input file %s.\n", matFilename);
+	//fprintf(stderr,"Initializing ANEOS with input file %s.\n", matFilename);
 
 	// Use aneos.input for ANEOS
     assert(matFilename != NULL);

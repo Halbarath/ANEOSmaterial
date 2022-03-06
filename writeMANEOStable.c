@@ -30,6 +30,7 @@ int main(int argc, char *argv[])
 {
     char inputfile[256] = "";
     char outputfile[256] = "";
+    char exoutputfile[256] = "";
     char matstring[1024] = "";
     double rho0;
 
@@ -101,12 +102,17 @@ int main(int argc, char *argv[])
 
     fprintf(stderr, "Initializing arrays\n");
 
+    /* Basic arrays that are required for generating IC and impact simulations. */
     double **rhoArray = (double **)malloc(sizeof(double*)*nT);
     double **TArray = (double **)malloc(sizeof(double*)*nT);
     double **uArray = (double **)malloc(sizeof(double*)*nT);
     double **pArray = (double **)malloc(sizeof(double*)*nT);
     double **cArray = (double **)malloc(sizeof(double*)*nT);
     double **sArray = (double **)malloc(sizeof(double*)*nT);
+
+    /* Extended arrays that can be useful for interpreting simulation results. */
+    int **PhaseArray = (int **)malloc(sizeof(int*)*nT);
+
     for (int i=0; i<nT; i++)
     {
         rhoArray[i] = (double *)malloc(nRho * sizeof(double)); 
@@ -115,6 +121,9 @@ int main(int argc, char *argv[])
         pArray[i] = (double *)malloc(nRho * sizeof(double)); 
         cArray[i] = (double *)malloc(nRho * sizeof(double)); 
         sArray[i] = (double *)malloc(nRho * sizeof(double)); 
+
+        /* Extended arrays. */ 
+        PhaseArray[i] = (int *)malloc(nRho * sizeof(int)); 
     }
 
     double T;
@@ -141,18 +150,20 @@ int main(int argc, char *argv[])
             rho = rhoAxis[j];
 
             callaneos_cgs(T, rho, iMat, &pArray[i][j], &uArray[i][j], &sArray[i][j], &cv, &dPdT,
-                    &dPdrho, &fkros, &cArray[i][j], &iPhase, &rhoL, &rhoH, &ion);
+                    &dPdrho, &fkros, &cArray[i][j], &PhaseArray[i][j], &rhoL, &rhoH, &ion);
 
             TArray[i][j] = T;
             rhoArray[i][j] = rho;
         }
     }
+
     fprintf(stderr, "Arrays filled\n");
 
     fprintf(stderr, "Write file\n");
 
     FILE *file = fopen(outputfile, "wb");
 
+    /* Write header. */
     fwrite(&rho0, sizeof(rho0), 1, file);
     fwrite(&nRho, sizeof(nRho), 1, file);
     fwrite(&nT, sizeof(nT), 1, file);
@@ -160,6 +171,7 @@ int main(int argc, char *argv[])
     fwrite(rhoAxis, sizeof(rhoAxis[0]), nRho, file);
     fwrite(TAxis, sizeof(TAxis[0]), nT, file);
 
+    /* Arrays. */
     for (int i=0; i< nT; i++)
     {
         fwrite(pArray[i], sizeof(pArray[i][0]), nRho, file);
@@ -185,6 +197,30 @@ int main(int argc, char *argv[])
     }
 
     fclose(file);
+    
+    /* Writing extended arrays. */
+    strcpy(exoutputfile, outputfile);
+    strcat(exoutputfile, "_ex");
+
+    file = fopen(exoutputfile, "wb");
+
+    fwrite(&nRho, sizeof(nRho), 1, file);
+    fwrite(&nT, sizeof(nT), 1, file);
+
+    fwrite(rhoAxis, sizeof(rhoAxis[0]), nRho, file);
+    fwrite(TAxis, sizeof(TAxis[0]), nT, file);
+
+    for (int i=0; i< nT; i++)
+    {
+        fwrite(PhaseArray[i], sizeof(PhaseArray[i][0]), nRho, file);
+    }
+ 
+    if (argc == 5) {
+        fwrite(matstring, sizeof(matstring), 1, file);
+    }
+
+    fclose(file);
+
 
     fprintf(stderr, "Finished, exiting\n");
     return 0;
