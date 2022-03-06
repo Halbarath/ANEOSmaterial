@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
 
             /* Check extended EOS tables. */
             if (Mat->PhaseArray != NULL) {
-                if (abs(Phase - ANEOSPhaseofRhoT(Mat, rho, T)) < 1e-3) {
+                if (Phase == ANEOSPhaseofRhoT(Mat, rho, T)) {
                     PhaseDiff[i][j] = 0;
                 } else {
                     PhaseDiff[i][j] = 1;
