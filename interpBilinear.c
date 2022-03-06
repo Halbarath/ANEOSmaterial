@@ -202,7 +202,16 @@ double interpolateValueNearest(double rho, double T, int nT, int nRho, double* r
     double f01=zArray[j+1][i];
     double f10=zArray[j][i+1];
     double f11=zArray[j+1][i+1];
-
+    
+    if ((x <= 0.5) && (y <= 0.5)) {
+        return f00;
+    } else if ((x <= 0.5) && (y > 0.5)) {
+        return f01;
+    } else if ((x > 0.5) && (y <= 0.5)) {
+        return f10;
+    } else {
+        return f11;
+    }
 }
 
 
