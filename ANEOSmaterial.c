@@ -535,7 +535,7 @@ double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T)
 /*
  * Calculates pressure phase(rho,T)
  */
-double ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T)
+int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
 	double phase = interpolateValueNearest(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, (double**)material->PhaseArray);
 	if (phase<-1e40){fprintf(stderr,"ANEOSPhaseofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);}
