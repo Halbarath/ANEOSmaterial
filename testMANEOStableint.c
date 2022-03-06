@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
     /* Number of grid points on the interpolated grid. */
     int nGridT;
     int nGridRho;
-    int nSteps = 5;
+    int nSteps = 2;
     double eps = 1e-6;
     FILE *fp;
 
@@ -131,9 +131,13 @@ int main(int argc, char *argv[])
     fprintf(stderr, "CodeUnitstoCGSforC   = %15.7E\n", Mat->CodeUnitstoCGSforC);
     fprintf(stderr, "\n");
 
-    nGridRho = nSteps*(Mat->nRho-1);
-    nGridT = nSteps*(Mat->nT-1);
+    //nGridRho = nSteps*(Mat->nRho-1);
+    //nGridT = nSteps*(Mat->nT-1);
+    nGridRho = 2*(Mat->nRho);
+    nGridT = 2*(Mat->nT);
+
     fprintf(stderr, "nGridRho = %i nGridT = %i\n", nGridRho, nGridT);
+    fprintf(stderr, "nRho = %i nT = %i\n", Mat->nRho, Mat->nT);
     
     /* Allocate memory. */
     rhoAxisInt = (double *)malloc(nGridRho * sizeof(double));
@@ -144,9 +148,9 @@ int main(int argc, char *argv[])
     sDiff = (double **)malloc(sizeof(double*)*nGridT);
     cDiff = (double **)malloc(sizeof(double*)*nGridT);
 
-    PhaseDiff = (int **)malloc(sizeof(int*)*Mat->nT);
+    PhaseDiff = (int **)malloc(sizeof(int*)*nGridT);
 
-    for (int i=0; i<Mat->nT; i++)
+    for (int i=0; i<nGridT; i++)
     {
         pDiff[i] = (double *)malloc(nGridRho * sizeof(double));
         uDiff[i] = (double *)malloc(nGridRho * sizeof(double));
@@ -167,6 +171,9 @@ int main(int argc, char *argv[])
         rhoAxisInt[j] = rho;
     }
 
+    fprintf(stderr, "rho_min = %15.7E rho_max = %15.7E\n", rhoAxisInt[0], rhoAxisInt[nGridRho-1]);
+    fprintf(stderr, "T_min   = %15.7E T_max   = %15.7E\n", TAxisInt[0], TAxisInt[nGridT-1]);
+
     /* Write axis to a file. */
     fp = fopen("T_axis_int.txt", "w");
 
@@ -184,6 +191,8 @@ int main(int argc, char *argv[])
 
     fclose(fp);
 
+    fprintf(stderr, "Check EOS table.\n");
+
     /* Do not include the end points of the EOS table because interpolation fails there. */
     for (int i=0; i<nGridT-1; i++) {
         for (int j=0; j<nGridRho-1; j++) {
@@ -194,44 +203,39 @@ int main(int argc, char *argv[])
             callaneos_cgs(T, rho, 1, &P, &u, &s, &cv, &dPdT, &dPdrho, &fkros, &cs,
                           &Phase, &rhoL, &rhoH, &ion);
             
-            double err;
+            //fprintf(stderr, "i=% i j= %i\n", i, j);
+            
+            pDiff[i][j] = fabs((ANEOSPofRhoT(Mat, rho, T)-P)/P);
+            uDiff[i][j] = fabs((ANEOSUofRhoT(Mat, rho, T)-u)/u);
+            //sDiff[i][j] = fabs((ANEOSSofRhoT(Mat, rho, T)-s)/s);
+            cDiff[i][j] = fabs((ANEOSCofRhoT(Mat, rho, T)-cs)/cs);
 
-            if (P < 1) {
-                err = -1;
-            } else {
-                err = fabs((ANEOSPofRhoT(Mat, rho, T)-P)/P);
+            /* Check extended EOS tables. */
+            if (Mat->PhaseArray != NULL) {
+                if (abs(Phase - ANEOSPhaseofRhoT(Mat, rho, T)) < 1e-3) {
+                    PhaseDiff[i][j] = 0;
+                } else {
+                    PhaseDiff[i][j] = 1;
+                }
             }
-
-            printf("%15.7E", err);
-#if 0
-                pDiff[i][j] = fabs((P-Mat->pArray[i][j])/P);
-                uDiff[i][j] = fabs((u-Mat->uArray[i][j])/u);
-                sDiff[i][j] = fabs((s-Mat->sArray[i][j])/s);
-                cDiff[i][j] = fabs((cs-Mat->cArray[i][j])/cs);
-
-                /* Check extended EOS tables. */
-                if (Mat->PhaseArray != NULL)
-                    PhaseDiff[i][j] = fabs((Phase-Mat->PhaseArray[i][j])/Phase);
-#endif
-                    //fprintf(stderr, "rho = %15.7E T = %15.7E\n", rho, T);
-            }
-        printf("\n");
+        }
     }
 
-    exit(1);
+    fprintf(stderr, "\n");
+
     /* Print differences to a file. */
-    fp = fopen("diff_press.txt", "w");
-    PrintArrayDouble(pDiff, Mat->nRho, Mat->nT, fp);
+    fp = fopen("diff_press_int.txt", "w");
+    PrintArrayDouble(pDiff, nGridRho, nGridT, fp);
     fclose(fp);
 
-    fp = fopen("diff_u.txt", "w");
-    PrintArrayDouble(uDiff, Mat->nRho, Mat->nT, fp);
+    fp = fopen("diff_u_int.txt", "w");
+    PrintArrayDouble(uDiff, nGridRho, nGridT, fp);
     fclose(fp);
 
     /* Print extended EOS tables. */
     if (Mat->PhaseArray != NULL) {
-        fp = fopen("diff_phase.txt", "w");
-        PrintArrayInt(PhaseDiff, Mat->nRho, Mat->nT, fp);
+        fp = fopen("diff_phase_int.txt", "w");
+        PrintArrayInt(PhaseDiff, nGridRho, nGridT, fp);
         fclose(fp);
     }
 
