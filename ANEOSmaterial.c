@@ -533,6 +533,16 @@ double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T)
 }
 
 /*
+ * Calculates pressure phase(rho,T)
+ */
+double ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T)
+{
+	double phase = interpolateValueNearest(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, (double**)material->PhaseArray);
+	if (phase<-1e40){fprintf(stderr,"ANEOSPhaseofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);}
+	return (int)phase;
+}
+
+/*
  * Calculates the isentropic evolution u2(rho1,u1,rho2)
  */
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2)

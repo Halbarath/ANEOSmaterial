@@ -93,6 +93,9 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u);
 double ANEOSCofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T);
 
+// These functions are for extended EOS tables.
+double ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T);
+
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2);
 
 double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u);
