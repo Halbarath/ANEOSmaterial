@@ -533,6 +533,16 @@ double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T)
 }
 
 /*
+ * Calculates pressure phase(rho,u)
+ */
+int ANEOSPhaseofRhoU(ANEOSMATERIAL *material, double rho, double u)
+{
+	double T = ANEOSTofRhoU(material,rho,u);
+	int phase = ANEOSPhaseofRhoT(material, rho, T);
+	return phase;
+}
+
+/*
  * Calculates pressure phase(rho,T)
  */
 int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T)
