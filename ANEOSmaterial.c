@@ -236,6 +236,7 @@ void ANEOSfinalizeMaterial(ANEOSMATERIAL *material)
             if (material->PhaseArray[i] != NULL)
                 free(material->PhaseArray[i]);
         }
+	free(material->PhaseArray);
     }
 
 	free(material->rhoAxis);
