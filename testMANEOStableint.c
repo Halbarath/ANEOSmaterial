@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
     /* Number of grid points on the interpolated grid. */
     int nGridT;
     int nGridRho;
-    int nSteps = 2;
+    int nGridInt = 2;
     double eps = 1e-6;
     FILE *fp;
 
@@ -131,12 +131,11 @@ int main(int argc, char *argv[])
     fprintf(stderr, "CodeUnitstoCGSforC   = %15.7E\n", Mat->CodeUnitstoCGSforC);
     fprintf(stderr, "\n");
 
-    //nGridRho = nSteps*(Mat->nRho-1);
-    //nGridT = nSteps*(Mat->nT-1);
-    nGridRho = 2*(Mat->nRho);
-    nGridT = 2*(Mat->nT);
+    /* Between two grid point of the EOS table we have nGridInt interpolation points.*/
+    nGridRho = (nGridInt+1)*(Mat->nRho-1)+1;
+    nGridT = (nGridInt+1)*(Mat->nT-1)+1;
 
-    fprintf(stderr, "nGridRho = %i nGridT = %i\n", nGridRho, nGridT);
+    fprintf(stderr, "nGridRho = %i nGridT = %i nGridInt = %i\n", nGridRho, nGridT, nGridInt);
     fprintf(stderr, "nRho = %i nT = %i\n", Mat->nRho, Mat->nT);
     
     /* Allocate memory. */
@@ -161,15 +160,23 @@ int main(int argc, char *argv[])
     }
 
     /* Generate rho and T axis for interpolation. */
-    for (int i=0; i<nGridT; i++) {
-        T = Mat->TAxis[0] + i*(Mat->TAxis[Mat->nT-1]-Mat->TAxis[0])/(nGridT-1);
-        TAxisInt[i] = T;
+    for (int i=0; i<Mat->nT-1; i++) {
+        for (int k=0; k<=nGridInt; k++) {
+            T = Mat->TAxis[i] + k*(Mat->TAxis[i+1]-Mat->TAxis[i])/(nGridInt+2);
+            TAxisInt[i*(nGridInt+1)+k] = T;
+        }
+    }
+    
+    for (int j=0; j<Mat->nRho-1; j++) {
+        for (int l=0; l<=nGridInt; l++) {
+            rho = Mat->rhoAxis[j] + l*(Mat->rhoAxis[j+1]-Mat->rhoAxis[j])/(nGridRho+2);
+            rhoAxisInt[j*(nGridInt+1)+l] = rho;
+        }
     }
 
-    for (int j=0; j<nGridRho; j++) {
-        rho = Mat->rhoAxis[0] + j*(Mat->rhoAxis[Mat->nRho-1]-Mat->rhoAxis[0])/(nGridRho-1);
-        rhoAxisInt[j] = rho;
-    }
+    /* Include the last grid point. */
+    TAxisInt[nGridT-1] = Mat->TAxis[Mat->nT-1];
+    rhoAxisInt[nGridRho-1] = Mat->rhoAxis[Mat->nRho-1]; 
 
     fprintf(stderr, "rho_min = %15.7E rho_max = %15.7E\n", rhoAxisInt[0], rhoAxisInt[nGridRho-1]);
     fprintf(stderr, "T_min   = %15.7E T_max   = %15.7E\n", TAxisInt[0], TAxisInt[nGridT-1]);
@@ -225,17 +232,17 @@ int main(int argc, char *argv[])
 
     /* Print differences to a file. */
     fp = fopen("diff_press_int.txt", "w");
-    PrintArrayDouble(pDiff, nGridRho, nGridT, fp);
+    PrintArrayDouble(pDiff, nGridRho-1, nGridT-1, fp);
     fclose(fp);
 
     fp = fopen("diff_u_int.txt", "w");
-    PrintArrayDouble(uDiff, nGridRho, nGridT, fp);
+    PrintArrayDouble(uDiff, nGridRho-1, nGridT-1, fp);
     fclose(fp);
 
     /* Print extended EOS tables. */
     if (Mat->PhaseArray != NULL) {
         fp = fopen("diff_phase_int.txt", "w");
-        PrintArrayInt(PhaseDiff, nGridRho, nGridT, fp);
+        PrintArrayInt(PhaseDiff, nGridRho-1, nGridT-1, fp);
         fclose(fp);
     }
 
