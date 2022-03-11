@@ -34,6 +34,8 @@
 #define MAT_MANEOS_FOSTERITE  62
 #define MAT_MANEOS_IRON       63
 
+#define ANEOS_N_MATERIAL_MAX  100
+
 typedef struct ANEOSmaterial
 {
 	int iMat; // Material number

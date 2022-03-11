@@ -86,7 +86,10 @@ writePhase: writePhase.o $(objects) $(fortran_objects)
 writePhaseMANEOS: writePhaseMANEOS.o $(objects) $(fortran_objects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-writePressureTable: writePressureTable.o $(objects) $(fortran_objects)
+writePressureTable: writePressureTable.o $(mylibobjects)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+writePhaseTable: writePhaseTable.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 aneoscall: aneoscall.o $(objects) $(fortran_objects) 
@@ -96,7 +99,7 @@ aneoscall: aneoscall.o $(objects) $(fortran_objects)
 maneoscall: maneoscall.o $(objects) $(fortran_objects) 
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-tipsy_iphase_array: tipsy_iphase_array.o $(objects) $(fortran_objects) tipsy.o 
+tipsy_iphase_array: tipsy_iphase_array.o $(mylibobjects) tipsy.o 
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 tipsy_ascii: tipsy_ascii.o $(objects) $(fortran_objects) tipsy.o 

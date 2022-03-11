@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
     FILE *fp;
 
 	if (argc != 2) {
-        fprintf(stderr,"Usage: writePressureTable <iMat>\n");
+        fprintf(stderr,"Usage: writePhaseTable <iMat>\n");
         exit(1);
     }
 	
@@ -45,10 +45,16 @@ int main(int argc, char *argv[])
     Mat =  ANEOSinitMaterial(iMat, dKpcUnit, dMsolUnit);
     assert(Mat != NULL);
 
+    // Check if the extended EOS table was loaded
+    if (Mat->PhaseArray == NULL) {
+        fprintf(stderr, "Extended EOS table not loaded.\n");
+        exit(1);
+    }
+
     fprintf(stderr, "iMat = %i:  %s (%s)\n", Mat->iMat, Mat->matName, Mat->matstring);
     fprintf(stderr, "nRho = %i nT = %i\n", Mat->nRho, Mat->nT);
     
-    fp = fopen("pressure.txt", "w");
+    fp = fopen("phase.txt", "w");
     assert(fp != NULL);
 
     fprintf(fp, "# %s\n", Mat->matstring);
@@ -61,7 +67,7 @@ int main(int argc, char *argv[])
 		}
 		for (int j=0; j<Mat->nRho; j++)
 		{
-            fprintf(fp,"%15.7E%15.7E%15.7E\n", Mat->rhoAxis[j], Mat->TAxis[i], Mat->pArray[i][j]);
+            fprintf(fp,"%15.7E %15.7E %i\n", Mat->rhoAxis[j], Mat->TAxis[i], Mat->PhaseArray[i][j]);
 		}
 	}
     fclose(fp);
