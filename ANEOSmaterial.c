@@ -56,6 +56,9 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 		case MAT_MANEOS_IRON:
 			strcpy(inputfile, "MANEOStable_iron.in");
 			break;
+		case MAT_MANEOS_FE85SI15:
+			strcpy(inputfile, "MANEOStable_iron_Fe85Si15.in");
+			break;
 		default:
 			assert(0);
 	}
