@@ -60,6 +60,7 @@ int main(int argc, char *argv[])
     fp = fopen("phase.txt", "w");
     assert(fp != NULL);
 
+    fprintf(fp, "# %s\n", Mat->matstring);
     fprintf(fp, "# iMat = %i nRho = %i nT = %i\n", iMat, Mat->nRho, Mat->nT);
 
 	for (int i=0; i<Mat->nT; i++)
