@@ -33,8 +33,7 @@
 #define MAT_MANEOS_DUNITE     61
 #define MAT_MANEOS_FOSTERITE  62
 #define MAT_MANEOS_IRON       63
-
-#define ANEOS_N_MATERIAL_MAX  100
+#define MAT_MANEOS_FE85SI15   64
 
 typedef struct ANEOSmaterial
 {
