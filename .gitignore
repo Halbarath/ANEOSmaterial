@@ -203,3 +203,10 @@ tags
 *.asv
 *.mat
 *.in
+
+# extended eos tables
+*.in_ex
+
+# ANEOS / M-ANEOS input files
+*.input
+*.INPUT
