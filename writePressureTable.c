@@ -33,9 +33,6 @@ int main(int argc, char *argv[])
     // Use cgs units.
     double dKpcUnit = 0.0;
     double dMsolUnit = 0.0;
-    double rho;
-    double T;
-    double p;
     FILE *fp;
 
 	if (argc != 2) {
