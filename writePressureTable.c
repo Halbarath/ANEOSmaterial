@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
 		}
 		for (int j=0; j<Mat->nRho; j++)
 		{
-            fprintf(fp,"%15.7E%15.7E%15.7E\n", Mat->rhoAxis[j], Mat->TAxis[i], Mat->pArray[i][j]);
+            fprintf(fp,"%.15e %.15e %.15e\n", Mat->rhoAxis[j], Mat->TAxis[i], Mat->pArray[i][j]);
 		}
 	}
     fclose(fp);

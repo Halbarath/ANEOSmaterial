@@ -159,6 +159,51 @@ int main(int argc, char *argv[])
 
     fprintf(stderr, "Arrays filled\n");
 
+    fprintf(stderr, "Correcting Pressure array\n");
+    double *workP = (double *)malloc(nT * sizeof(double));
+    for (int i = 0; i<nT; i++) {
+        // assign line to work array
+        for (int j = 0; j<nRho; j++) {
+            workP[j] = pArray[i][j];
+        }
+        // set first value
+        workP[0] = workP[0] > 1e-20 ? workP[0] : 1e-20;
+        // force cummax
+        double maximum = workP[0];
+        for (int k = 1; k<nRho; k++) {
+            if (workP[k] <= maximum) {
+                workP[k] = maximum;
+            }
+            maximum = workP[k] > maximum ? workP[k] : maximum;
+        }
+        // Correct pressure
+        int foundRegion = 0;
+        int index1 = -1;
+        int index2 = -1;
+        for (int k = 1; k<nRho; k++) {
+            if (!foundRegion && (fabs(workP[k] - workP[k-1]) / workP[k] <= 1e-8)) {
+                index1 = k-1;
+                foundRegion = 1;
+            }
+            if (foundRegion && (fabs(workP[k] - workP[k-1]) / workP[k] > 1e-8)) {
+                index2 = k-1;
+                double x1 = log10(rhoAxis[index1]);
+                double x2 = log10(rhoAxis[index2+1]);
+                double y1 = log10(workP[index1]);
+                double y2 = log10((workP[index2] * 99.0 + workP[index2+1])/100.0);
+                for (int m = index1; m<=index2; m++) {
+                    workP[m] = pow(10.0,y1 + (log10(rhoAxis[m]) - x1) * (y2 - y1) / (x2 - x1));
+                }
+                foundRegion = 0;
+            }
+        }
+        // assign corrected values back
+        for (int j = 0; j<nRho; j++) {
+            pArray[i][j] = workP[j];
+        }
+    }
+    fprintf(stderr, "Pressure array corrected\n");
+
     fprintf(stderr, "Write file\n");
 
     FILE *file = fopen(outputfile, "wb");
