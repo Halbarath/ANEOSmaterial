@@ -160,7 +160,7 @@ int main(int argc, char *argv[])
     fprintf(stderr, "Arrays filled\n");
 
     fprintf(stderr, "Correcting Pressure array\n");
-    double *workP = (double *)malloc(nT * sizeof(double));
+/*    double *workP = (double *)malloc(nT * sizeof(double));
     for (int i = 0; i<nT; i++) {
         // assign line to work array
         for (int j = 0; j<nRho; j++) {
@@ -200,6 +200,24 @@ int main(int argc, char *argv[])
         // assign corrected values back
         for (int j = 0; j<nRho; j++) {
             pArray[i][j] = workP[j];
+        }
+    }*/
+
+    pArray[0][0] = 1e-20;
+    for (int i = 0; i<nT; i++)
+    {
+        for (int j = 0; j<nRho; j++)
+        {
+            if (i > 0) {
+                if (pArray[i][j] < 1.02 * pArray[i-1][j]) {
+                    pArray[i][j] = 1.02 * pArray[i-1][j];
+                }
+            }
+            if (j > 0) {
+                if (pArray[i][j] < 1.02 * pArray[i][j-1]) {
+                    pArray[i][j] = 1.02 * pArray[i][j-1];
+                }
+            }
         }
     }
     fprintf(stderr, "Pressure array corrected\n");
