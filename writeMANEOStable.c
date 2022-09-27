@@ -203,19 +203,19 @@ int main(int argc, char *argv[])
         }
     }*/
 
-    pArray[0][0] = 1e-20;
+    pArray[0][0] = pArray[0][0] > 1e-20 ? pArray[0][0] : 1e-20;
     for (int i = 0; i<nT; i++)
     {
         for (int j = 0; j<nRho; j++)
         {
             if (i > 0) {
-                if (pArray[i][j] < 1.02 * pArray[i-1][j]) {
-                    pArray[i][j] = 1.02 * pArray[i-1][j];
+                if (pArray[i][j] < 1.0001 * pArray[i-1][j]) {
+                    pArray[i][j] = 1.0001 * pArray[i-1][j];
                 }
             }
             if (j > 0) {
-                if (pArray[i][j] < 1.02 * pArray[i][j-1]) {
-                    pArray[i][j] = 1.02 * pArray[i][j-1];
+                if (pArray[i][j] < 1.0001 * pArray[i][j-1]) {
+                    pArray[i][j] = 1.0001 * pArray[i][j-1];
                 }
             }
         }
