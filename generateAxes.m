@@ -19,12 +19,12 @@ close all
 clc
 
 nRho=1401;
-nT=1201;
+nT=1601;
 
 minRho=1e-4;
 maxRho=1000;
 minT=1;
-maxT=1e6;
+maxT=1e8;
 
 % Add one grid point at 1e-25 to have larger density range covered
 rhoAxis=[1e-25 logspace(log10(minRho),log10(maxRho),nRho)];

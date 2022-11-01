@@ -102,6 +102,9 @@ int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T);
 
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2);
 
+double ANEOSSofRhoU(ANEOSMATERIAL *material, double rho, double u);
+double ANEOSSofRhoT(ANEOSMATERIAL *material, double rho, double T);
+
 double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSdPdUofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSdUdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u);

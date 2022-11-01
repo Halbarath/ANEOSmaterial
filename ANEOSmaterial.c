@@ -571,6 +571,26 @@ double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double 
 }
 
 /*
+ * Calculates the entropy S(rho,u)
+ */
+double ANEOSSofRhoU(ANEOSMATERIAL *material, double rho, double u)
+{
+	double T = ANEOSTofRhoU(material, rho, u);
+	double S = ANEOSSofRhoT(material, rho, T);
+    return S;
+}
+
+/*
+ * Calculates the entropy S(rho,T)
+ */
+double ANEOSSofRhoT(ANEOSMATERIAL *material, double rho, double T)
+{
+	double S = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->sArray);
+	if (S<-1e40){fprintf(stderr,"ANEOSSofRhoT failed for rho = %.15e, T = %.15e", rho, T);}
+    return S;
+}
+
+/*
  * Calculates derivative dPdRho(rho,u)
  */
 double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
