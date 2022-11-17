@@ -213,7 +213,7 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
     strcat(exinputfile, "_ex");
 
     if (ANEOSReadExtendedTable(material, exinputfile)) {
-        fprintf(stderr, "No extended EOS tables found.\n");
+        //fprintf(stderr, "No extended EOS tables found.\n");
     }
 
 	return material;
@@ -266,7 +266,7 @@ int ANEOSReadExtendedTable(ANEOSMATERIAL *material, char *inputfile)
 
 	if ((file= fopen(inputfile, "rb")) == NULL)
 	{
-		fprintf(stderr, "ANEOSReadExtendedTable: Could not open file %s\n", inputfile);
+		//fprintf(stderr, "ANEOSReadExtendedTable: Could not open file %s\n", inputfile);
 		return 1;
 	}
 
