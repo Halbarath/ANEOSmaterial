@@ -48,6 +48,74 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
         return -1e50;
     }
 
+    int i=findIndex(rho, rhoAxis, nRho);
+    double x=(rho-rhoAxis[i])/(rhoAxis[i+1]-rhoAxis[i]);
+    double T = -1e50;
+    int a = 0;
+    int b = nT - 2;
+    int c = (a + b) / 2;
+    int dontexit = 1;
+    while (dontexit) {
+        if ((b - a) < 2) dontexit = 0;
+        double f00=zArray[c][i];
+        double f01=zArray[c+1][i];
+        double f10=zArray[c][i+1];
+        double f11=zArray[c+1][i+1];
+        double y = -(z - f10*x + f00*(x - 1))/(f10*x - f11*x - f00*(x - 1) + f01*(x - 1));
+        if (y > 1.0001) {
+            a = c;
+            c = (a + b) / 2;
+        } else if (y < -0.0001) {
+            b = c;
+            c = (a + b) / 2;
+        } else {
+            T = (TAxis[c+1]-TAxis[c])*y+TAxis[c];
+            break;
+        }
+    }
+    if (T < -1e40) {
+        T = backwardInterpolateTemperatureBilinearOld(rho, z, nT, nRho, rhoAxis, TAxis, zArray);
+    }
+    return T;
+    // double a = TAxis[0];
+    // double b = TAxis[nT-1]*0.999;
+    // double c = -1e50;
+    // double zc = 0;
+
+    // while (2*(b-a)/(b+a) > 1e-10) {
+        // c = 0.5*(a + b);
+        // zc = interpolateValueBilinear(rho, c, nT, nRho, rhoAxis, TAxis, zArray);
+        // if (zc > z) {
+            // b = c;
+        // } else {
+            // a = c;
+        // }
+    // }
+    // return c;
+}
+
+/*
+ * Backward interpolate the temperature using bilinear interpolation
+ */
+double backwardInterpolateTemperatureBilinearOld(double rho, double z, int nT, int nRho, double* rhoAxis,
+        double* TAxis, double** zArray)
+{
+    // check if (rho,T) is out of bounds
+    if (rho < rhoAxis[0])
+    {
+#ifdef EOSLIB_VERBOSE
+        fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, rho = %.15e is smaller than minRho = %.15e\n", rho, rhoAxis[0]);
+#endif
+        return -1e50;
+    }
+    if (rho >= rhoAxis[nRho-1])
+    {
+#ifdef EOSLIB_VERBOSE
+        fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, rho = %.15e is larger than maxRho = %.15e\n", rho, rhoAxis[nRho-1]);
+#endif
+        return -1e50;
+    }
+
     // searching the rho interval containing the rho value
     int i=findIndex(rho, rhoAxis, nRho);
 
@@ -66,7 +134,7 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 
         double y = -(z - f10*x + f00*(x - 1))/(f10*x - f11*x - f00*(x - 1) + f01*(x - 1));
 
-        if (y>= 0.0 && y<=1.0)
+        if (y>= -0.0001 && y<=1.0001)
         {
             T = (TAxis[j+1]-TAxis[j])*y+TAxis[j];
             break;

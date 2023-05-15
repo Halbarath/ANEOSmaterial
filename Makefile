@@ -62,6 +62,9 @@ all: default
 testANEOSmaterial: testANEOSmaterial.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+testBackwardInterpolation: testBackwardInterpolation.o $(mylibobjects)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 testMANEOStable: testMANEOStable.o $(mylibobjects) $(fortran_objects) $(objects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 

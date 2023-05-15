@@ -586,7 +586,7 @@ double ANEOSSofRhoU(ANEOSMATERIAL *material, double rho, double u)
 double ANEOSSofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
 	double S = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->sArray);
-	if (S<-1e40){fprintf(stderr,"ANEOSSofRhoT failed for rho = %.15e, T = %.15e", rho, T);}
+	if (S<-1e40){fprintf(stderr,"ANEOSSofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);}
     return S;
 }
 
