@@ -61,14 +61,18 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
         double f01=zArray[c+1][i];
         double f10=zArray[c][i+1];
         double f11=zArray[c+1][i+1];
-        double y = -(z - f10*x + f00*(x - 1))/(f10*x - f11*x - f00*(x - 1) + f01*(x - 1));
-        if (y > 1.0001) {
+        double ylow = -0.0001;
+        double yhigh = 1.0001;
+        double zlow = ylow*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(ylow - 1);
+        double zhigh = yhigh*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(yhigh - 1);
+        if (z > zhigh) {
             a = c;
             c = (a + b) / 2;
-        } else if (y < -0.0001) {
+        } else if (z < zlow) {
             b = c;
             c = (a + b) / 2;
         } else {
+            double y = -(z - f10*x + f00*(x - 1))/(f10*x - f11*x - f00*(x - 1) + f01*(x - 1));
             T = (TAxis[c+1]-TAxis[c])*y+TAxis[c];
             break;
         }
