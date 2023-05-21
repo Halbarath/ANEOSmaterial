@@ -63,8 +63,8 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
         double f11=zArray[c+1][i+1];
         double ylow = -0.0001;
         double yhigh = 1.0001;
-        double zlow = ylow*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(ylow - 1);
-        double zhigh = yhigh*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(yhigh - 1);
+        double zlow = ylow*(f11*x - f01*(x - 1.0)) - (f10*x - f00*(x - 1.0))*(ylow - 1.0);
+        double zhigh = yhigh*(f11*x - f01*(x - 1.0)) - (f10*x - f00*(x - 1.0))*(yhigh - 1.0);
         if (zhigh > zlow && z > zhigh) {
             // Normal arrangement, we have to look above
             a = c;
@@ -83,12 +83,12 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
             c = (a + b) / 2;
         } else if (z <= zhigh && z >= zlow) {
             // Normal arrangement, its inside the cell
-            double y = -(z - f10*x + f00*(x - 1))/(f10*x - f11*x - f00*(x - 1) + f01*(x - 1));
+            double y = -(z - f10*x + f00*(x - 1.0))/(f10*x - f11*x - f00*(x - 1.0) + f01*(x - 1.0));
             T = (TAxis[c+1]-TAxis[c])*y+TAxis[c];
             break;
         } else if (z >= zhigh && z <= zlow) {
             // Inverted arrangement, its inside the cell
-            double y = -(z - f10*x + f00*(x - 1))/(f10*x - f11*x - f00*(x - 1) + f01*(x - 1));
+            double y = -(z - f10*x + f00*(x - 1.0))/(f10*x - f11*x - f00*(x - 1.0) + f01*(x - 1.0));
             T = (TAxis[c+1]-TAxis[c])*y+TAxis[c];
             break;
         } else {
@@ -139,7 +139,7 @@ double backwardInterpolateTemperatureBilinearOld(double rho, double z, int nT, i
         double f10=zArray[j][i+1];
         double f11=zArray[j+1][i+1];
 
-        double y = -(z - f10*x + f00*(x - 1))/(f10*x - f11*x - f00*(x - 1) + f01*(x - 1));
+        double y = -(z - f10*x + f00*(x - 1.0))/(f10*x - f11*x - f00*(x - 1.0) + f01*(x - 1.0));
 
         if (y>= -0.0001 && y<=1.0001)
         {
@@ -162,7 +162,7 @@ double backwardInterpolateTemperatureBilinearOld(double rho, double z, int nT, i
         double f01=zArray[j+1][i];
         double f10=zArray[j][i+1];
         double f11=zArray[j+1][i+1];
-        double zbottom = y*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(y - 1);
+        double zbottom = y*(f11*x - f01*(x - 1.0)) - (f10*x - f00*(x - 1.0))*(y - 1.0);
 
         if (z < zbottom)
         {
@@ -175,7 +175,7 @@ double backwardInterpolateTemperatureBilinearOld(double rho, double z, int nT, i
         f01=zArray[j+1][i];
         f10=zArray[j][i+1];
         f11=zArray[j+1][i+1];
-        double ztop = y*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(y - 1);
+        double ztop = y*(f11*x - f01*(x - 1.0)) - (f10*x - f00*(x - 1.0))*(y - 1.0);
         if (z > ztop)
         {
             // above the grid
@@ -349,7 +349,7 @@ double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* 
 
     double z = -1e50;
 
-    z = y*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(y - 1);
+    z = y*(f11*x - f01*(x - 1.0)) - (f10*x - f00*(x - 1.0))*(y - 1.0);
     return z;
 }
 
