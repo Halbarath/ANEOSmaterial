@@ -65,38 +65,41 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
         double yhigh = 1.0001;
         double zlow = ylow*(f11*x - f01*(x - 1.0)) - (f10*x - f00*(x - 1.0))*(ylow - 1.0);
         double zhigh = yhigh*(f11*x - f01*(x - 1.0)) - (f10*x - f00*(x - 1.0))*(yhigh - 1.0);
-        if (zhigh > zlow && z > zhigh) {
-            // Normal arrangement, we have to look above
+        // printf("a = %d, b = %d, c = %d, zlow = %.5e, zhigh = %.5e, z = %.5e\n", a, b, c, zlow, zhigh, z);
+        if (z > zhigh) {
+            // printf("Normal arrangement, we have to look above\n");
             a = c;
             c = (a + b) / 2;
-        } else if (zlow >= zhigh && z < zhigh) {
-            // Inverted arrangement, we have to look above
-            a = c;
-            c = (a + b) / 2;
-        } else if (zhigh > zlow && z < zlow) {
-            // Normal arrangement, we have to look below
+        // } else if (zlow > zhigh && z < zhigh) {
+            // printf("Inverted arrangement, we have to look above\n");
+            // a = c;
+            // c = (a + b) / 2;
+        } else if (z < zlow) {
+            // printf("Normal arrangement, we have to look below\n");
             b = c;
             c = (a + b) / 2;
-        } else if (zlow >= zhigh && z > zlow){
-            // Inverted arrangement, we have to look below
-            b = c;
-            c = (a + b) / 2;
+        // } else if (zlow > zhigh && z > zlow){
+            // printf("Inverted arrangement, we have to look below\n");
+            // b = c;
+            // c = (a + b) / 2;
         } else if (z <= zhigh && z >= zlow) {
-            // Normal arrangement, its inside the cell
+            // printf("Normal arrangement, its inside the cell\n");
             double y = -(z - f10*x + f00*(x - 1.0))/(f10*x - f11*x - f00*(x - 1.0) + f01*(x - 1.0));
             T = (TAxis[c+1]-TAxis[c])*y+TAxis[c];
             break;
-        } else if (z >= zhigh && z <= zlow) {
-            // Inverted arrangement, its inside the cell
+        } else if (zhigh < zlow && (z >= zhigh && z <= zlow)) {
+            printf("Inverted arrangement, its inside the cell\n");
             double y = -(z - f10*x + f00*(x - 1.0))/(f10*x - f11*x - f00*(x - 1.0) + f01*(x - 1.0));
             T = (TAxis[c+1]-TAxis[c])*y+TAxis[c];
             break;
         } else {
+            // printf("exited early\n");
             break;
         }
     }
     if (T < -1e40) {
         T = backwardInterpolateTemperatureBilinearOld(rho, z, nT, nRho, rhoAxis, TAxis, zArray);
+        // printf("did old version\n");
     }
     return T;
 }
