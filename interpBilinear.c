@@ -65,15 +65,33 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
         double yhigh = 1.0001;
         double zlow = ylow*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(ylow - 1);
         double zhigh = yhigh*(f11*x - f01*(x - 1)) - (f10*x - f00*(x - 1))*(yhigh - 1);
-        if (z > zhigh) {
+        if (zhigh > zlow && z > zhigh) {
+            // Normal arrangement, we have to look above
             a = c;
             c = (a + b) / 2;
-        } else if (z < zlow) {
+        } else if (zlow >= zhigh && z < zhigh) {
+            // Inverted arrangement, we have to look above
+            a = c;
+            c = (a + b) / 2;
+        } else if (zhigh > zlow && z < zlow) {
+            // Normal arrangement, we have to look below
             b = c;
             c = (a + b) / 2;
-        } else {
+        } else if (zlow >= zhigh && z > zlow){
+            // Inverted arrangement, we have to look below
+            b = c;
+            c = (a + b) / 2;
+        } else if (z <= zhigh && z >= zlow) {
+            // Normal arrangement, its inside the cell
             double y = -(z - f10*x + f00*(x - 1))/(f10*x - f11*x - f00*(x - 1) + f01*(x - 1));
             T = (TAxis[c+1]-TAxis[c])*y+TAxis[c];
+            break;
+        } else if (z >= zhigh && z <= zlow) {
+            // Inverted arrangement, its inside the cell
+            double y = -(z - f10*x + f00*(x - 1))/(f10*x - f11*x - f00*(x - 1) + f01*(x - 1));
+            T = (TAxis[c+1]-TAxis[c])*y+TAxis[c];
+            break;
+        } else {
             break;
         }
     }
@@ -81,21 +99,6 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
         T = backwardInterpolateTemperatureBilinearOld(rho, z, nT, nRho, rhoAxis, TAxis, zArray);
     }
     return T;
-    // double a = TAxis[0];
-    // double b = TAxis[nT-1]*0.999;
-    // double c = -1e50;
-    // double zc = 0;
-
-    // while (2*(b-a)/(b+a) > 1e-10) {
-        // c = 0.5*(a + b);
-        // zc = interpolateValueBilinear(rho, c, nT, nRho, rhoAxis, TAxis, zArray);
-        // if (zc > z) {
-            // b = c;
-        // } else {
-            // a = c;
-        // }
-    // }
-    // return c;
 }
 
 /*
