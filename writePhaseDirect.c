@@ -29,11 +29,13 @@
 int main(int argc, char *argv[])
 {
 	if (argc != 2) {
-        fprintf(stderr,"Usage: writePhase <iMat>\n");
+        fprintf(stderr,"Usage: writePhase <aneos.input>\n");
         exit(1);
     }
 	
-	int iMat = atoi(argv[1]);
+	/* In M-ANEOS each input file contains one material so the iMat number is irrelevant */
+	int iMat = 1;
+	initaneos(argv[1]);
 	
 	char axesFilename[256] = "axes.in";
 	
@@ -76,8 +78,6 @@ int main(int argc, char *argv[])
 	
 	fclose(fp);
 
-	char matFilename[256] = "aneos.input";
-	initaneos(matFilename);
 
 	int **phaseArray = (int **)malloc(sizeof(int*)*nT);
     for (int i=0; i<nT; i++)
