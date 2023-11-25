@@ -6,12 +6,17 @@ from __future__ import print_function
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
+import sys
 
 
 def main():
     fig, ax = plt.subplots(1,1)
 
-    data = np.loadtxt("phase.txt")
+    if len(sys.argv) != 2:
+        print("Usage: plot_phase_table.py <phase.txt>")
+        exit(1)
+
+    data = np.loadtxt(sys.argv[1])
 
     rho = data[:,0]
     T = data[:,1]
