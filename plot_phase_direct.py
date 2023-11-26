@@ -40,7 +40,7 @@ def main():
         T_max = np.max(T)
 
         print("num_rho= {:} num_T= {:}".format(num_rho, num_T))
-        print("rho_min= {:} rho_min= {:} T_min= {:} T_max= {:}".format(rho_min, rho_max, T_min, T_max))
+        print("rho_min= {:.3E} rho_min= {:.3E} T_min= {:.3E} T_max= {:.3E}".format(rho_min, rho_max, T_min, T_max))
         if np.size(rho) != num_rho or np.size(T) != num_T:
             print("Error reading file.")
             exit(1)
