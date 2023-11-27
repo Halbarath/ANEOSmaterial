@@ -17,8 +17,9 @@
 
 /*
  * ANEOS material library
- * Writes the phase data on a grid for the ANEOS material model
- *
+ * Writes the phase data on a grid for the ANEOS material model.
+ * Note that this version is only compatible with the Bern version of
+ * ANEOS.
  */
 
 #include <math.h>
@@ -29,14 +30,12 @@
 int main(int argc, char *argv[])
 {
 	if (argc != 2) {
-        fprintf(stderr,"Usage: writePhase <aneos.input>\n");
+        fprintf(stderr,"Usage: writePhaseANEOS <iMat>\n");
         exit(1);
     }
 	
-	/* In M-ANEOS each input file contains one material so the iMat number is irrelevant */
-	int iMat = 1;
-	initaneos(argv[1]);
-	
+	int iMat = atoi(argv[1]);
+
 	char axesFilename[256] = "axes.in";
 	
 	FILE *fp;
@@ -78,6 +77,8 @@ int main(int argc, char *argv[])
 	
 	fclose(fp);
 
+	char matFilename[256] = "aneos.input";
+	initaneos(matFilename);
 
 	int **phaseArray = (int **)malloc(sizeof(int*)*nT);
     for (int i=0; i<nT; i++)

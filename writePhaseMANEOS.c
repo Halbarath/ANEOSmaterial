@@ -24,20 +24,18 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include "aneos.h"
 
 int main(int argc, char *argv[])
 {
 	if (argc != 2) {
-        fprintf(stderr,"Usage: writePhase <inputfile>\n");
+        fprintf(stderr,"Usage: writePhase <aneos.input>\n");
         exit(1);
     }
-
-	char inputfile[256] = "";
-    strcpy(inputfile, argv[1]);
-    
-    int iMat = 1;
+	
+	/* In M-ANEOS each input file contains one material so the iMat number is irrelevant */
+	int iMat = 1;
+	initaneos(argv[1]);
 	
 	char axesFilename[256] = "axes.in";
 	
@@ -52,11 +50,11 @@ int main(int argc, char *argv[])
     }
 	if (fgets(str, 1000, fp) != NULL)
 	{
-	nRho = (int) strtol(str, (char **)NULL, 10);
+		nRho = (int) strtol(str, (char **)NULL, 10);
 	}
 	if (fgets(str, 1000, fp) != NULL)
 	{
-	nT = (int) strtol(str, (char **)NULL, 10);
+		nT = (int) strtol(str, (char **)NULL, 10);
 	}
 	
 	double *rhoAxis = (double *)malloc(nRho * sizeof(double));
@@ -80,7 +78,6 @@ int main(int argc, char *argv[])
 	
 	fclose(fp);
 
-	initaneos(inputfile);
 
 	int **phaseArray = (int **)malloc(sizeof(int*)*nT);
     for (int i=0; i<nT; i++)
