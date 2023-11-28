@@ -74,6 +74,9 @@ testMANEOStableint: testMANEOStableint.o $(mylibobjects) $(fortran_objects) $(ob
 calcPressureRhoT: calcPressureRhoT.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+calcPressureRhoTMANEOS: calcPressureRhoTMANEOS.o $(objects) $(fortran_objects)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 calcDensityPT: calcDensityPT.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
@@ -99,6 +102,9 @@ writePhaseTable: writePhaseTable.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 aneoscall: aneoscall.o $(objects) $(fortran_objects) 
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+findPhaseBoundary: findPhaseBoundary.o $(objects) $(fortran_objects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 # Direct call to M-ANEOS. Be sure to compile with the correct object files.
