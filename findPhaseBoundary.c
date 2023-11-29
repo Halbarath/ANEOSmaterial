@@ -103,8 +103,6 @@ int main(int argc, char *argv[])
 
 		callaneos_cgs(T, rho, iMat, &p, &u, &s, &cv, &dPdT, &dPdrho, &fkros, &c, &phase, &rhoL, &rhoH, &ion);
 
-		fprintf(stderr, "rho= %15.7E T= %15.7E phase= %i\n", rho, T, phase);
-
 		/* Check if the is no solid phase even at T_min*/
 		if (phase != phase_id_solid) continue;
 
@@ -115,10 +113,10 @@ int main(int argc, char *argv[])
 
 			callaneos_cgs(Tb, rho, iMat, &p, &u, &s, &cv, &dPdT, &dPdrho, &fkros, &c, &phase, &rhoL, &rhoH, &ion);
 
-			fprintf(stderr, "rho= %15.7E Tb= %15.7E phase= %i\n", rho, Tb, phase);
+			//fprintf(stderr, "rho= %15.7E Tb= %15.7E phase= %i\n", rho, Tb, phase);
 		}
 
-		fprintf(stderr, "Root bracketed: rho=%15.7E Ta=%15.7E Tb=%15.7E\n", rho, Ta, Tb);
+		//fprintf(stderr, "Root bracketed: rho=%15.7E Ta=%15.7E Tb=%15.7E\n", rho, Ta, Tb);
 
 		while ((Tb - Ta)/T > 1e-8) {
 			T = 0.5*(Ta + Tb);
@@ -131,7 +129,7 @@ int main(int argc, char *argv[])
 				Tb = T;
 			}
 		
-			fprintf(stderr, "Root bracketed: rho=%15.7E T=%15.7E Ta=%15.7E Tb=%15.7E phase= %i\n", rho, T, Ta, Tb, phase);
+			//fprintf(stderr, "Root bracketed: rho=%15.7E T=%15.7E Ta=%15.7E Tb=%15.7E phase= %i\n", rho, T, Ta, Tb, phase);
 		}
 
 		T_melt[nMelt] = T;
