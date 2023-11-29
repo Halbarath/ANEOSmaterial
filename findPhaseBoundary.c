@@ -28,7 +28,7 @@
 
 int main(int argc, char *argv[])
 {
-	/* Variables needes for ANEOS */
+	/* Variables needed for ANEOS */
 	//double T;
     //double rho;
 	double p;
@@ -45,15 +45,17 @@ int main(int argc, char *argv[])
     double ion;
 	/* Phase id for a solid */
 	const int phase_id_solid = 4;
-	/* Define limits from axes.in */
-	//double rho_min = 1e-25;
-	//double rho_max = 1e3;
-	double rho_min = 2.0;
-	double rho_max = 1e3;
+	/* rho is read from axes.in */
+	char axesFilename[256] = "axes.in";
+	double *rhoAxis;
 	double T_min = 1.0;
-	int nRho = 10000;
-	//int nRho = 1402;
-	//int nT = 1601;
+	int nRho;
+	char str[1000];
+	FILE *fp;
+	/* Store T_melt(rho) */
+	double *rho_melt;
+	double *T_melt;
+	int nMelt = 0;
 
 	if (argc != 2) {
         fprintf(stderr,"Usage: findPhaseBoundary <aneos.input>\n");
@@ -64,21 +66,34 @@ int main(int argc, char *argv[])
 	int iMat = 1;
 	initaneos(argv[1]);
 
-	//rho_min = atof(argv[1]);
-	//rho_max = atof(argv[2]);
-
-	double *rhoAxis = (double *)malloc(nRho * sizeof(double));
-	double *Tm = (double *)malloc(nRho * sizeof(double));
-	//double *TAxis = (double *)malloc(nT * sizeof(double));
+	fp = fopen(axesFilename, "r");
 	
-	
-	for (int i=0; i<nRho; i++) {
-		rhoAxis[i] = rho_min + i*(rho_max - rho_min)/(nRho-1);
+	if (fp == NULL) {
+        fprintf(stderr,"Could not open file %s",axesFilename);
 	}
 
-	for (int i=0; i<nRho; i++) {
-		fprintf(stderr, "%15.7E\n", rhoAxis[i]);
+	if (fgets(str, 1000, fp) != NULL) {
+		nRho = (int) strtol(str, (char **)NULL, 10);
 	}
+
+	/* nT read from the input file is not used here! */
+	if (fgets(str, 1000, fp) != NULL) {
+		int tmp = (int) strtol(str, (char **)NULL, 10);
+	}
+
+	rhoAxis = (double *)malloc(nRho * sizeof(double));
+	T_melt = (double *)malloc(nRho * sizeof(double));
+	rho_melt = (double *)malloc(nRho * sizeof(double));
+	
+	for (int i=0; i<nRho; i++) {
+		if (fgets(str, 1000, fp) != NULL) {
+			rhoAxis[i] = (double) strtod(str, (char **)NULL);
+		}
+	}
+
+	fclose(fp);
+
+	fprintf(stderr, "Read file %s: nRho= %i\n", axesFilename, nRho);
 
 	for (int i=0; i<nRho; i++) {
 		double T = T_min;
@@ -91,10 +106,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "rho= %15.7E T= %15.7E phase= %i\n", rho, T, phase);
 
 		/* Check if the is no solid phase even at T_min*/
-		if (phase != phase_id_solid) {
-			Tm[i] = 0;
-			continue;
-		}
+		if (phase != phase_id_solid) continue;
 
 		/* Find upper limit */
 		while (phase == phase_id_solid) {
@@ -122,17 +134,18 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Root bracketed: rho=%15.7E T=%15.7E Ta=%15.7E Tb=%15.7E phase= %i\n", rho, T, Ta, Tb, phase);
 		}
 
-		Tm[i] = T;
+		T_melt[nMelt] = T;
+		rho_melt[nMelt] = rho;
+		nMelt++;
 	}
-
-	FILE *fp;
 
 	fp = fopen("phase_solid.txt", "w");
 
-	fprintf(fp, "#%14s%15s\n", "rho_m", "T_m");
-	
-	for (int i=0; i<nRho; i++) {
-		fprintf(fp, "%15.7E%15.7E\n", rhoAxis[i], Tm[i]);
+	fprintf(fp, "# n = %i\n", nMelt);
+	fprintf(fp, "#%14s%15s\n", "rho_m [g/cm^3]", "T_m [K]");
+
+	for (int i=0; i<nMelt; i++) {
+		fprintf(fp, "%15.7E%15.7E\n", rho_melt[i], T_melt[i]);
 	}
 
 	fclose(fp);
