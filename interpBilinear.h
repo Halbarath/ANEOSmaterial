@@ -35,4 +35,5 @@ double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* 
 int interpolateValueNearest(double rho, double T, int nT, int nRho, double* rhoAxis,
         double* TAxis, int** zArray);
 int findIndex(double x, double* xAxis, int nX);
+double interpolateValueLinear(double x, int nX, double* xAxis, double* yAxis);
 #endif

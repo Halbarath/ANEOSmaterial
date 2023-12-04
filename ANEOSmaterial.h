@@ -63,6 +63,9 @@ typedef struct ANEOSmaterial
     // Optional array
 	int **PhaseArray;
 
+    // Melt curve (optional)
+	double *T_melt;
+
 } ANEOSMATERIAL;
 
 // Initialization and finalization
@@ -72,6 +75,7 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
 void ANEOSfinalizeMaterial(ANEOSMATERIAL *material);
 
 int ANEOSReadExtendedTable(ANEOSMATERIAL *material, char *inputfile);
+int ANEOSReadMeltCurve(ANEOSMATERIAL *material, char *inputfile);
 
 // Access functions
 
@@ -99,11 +103,13 @@ double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T);
 // These functions are for extended EOS tables.
 int ANEOSPhaseofRhoU(ANEOSMATERIAL *material, double rho, double u);
 int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T);
+double ANEOSTmeltofRho(ANEOSMATERIAL *material, double rho);
 
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2);
 
 double ANEOSSofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSSofRhoT(ANEOSMATERIAL *material, double rho, double T);
+double ANEOSTmeltofRho(ANEOSMATERIAL *material, double rho);
 
 double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSdPdUofRhoU(ANEOSMATERIAL *material, double rho, double u);

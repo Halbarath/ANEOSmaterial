@@ -216,6 +216,14 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
         //fprintf(stderr, "No extended EOS tables found.\n");
     }
 
+	/* Read melt curve (optional) */
+    strcpy(exinputfile, inputfile);
+    strcat(exinputfile, "_tmelt");
+
+	if (ANEOSReadMeltCurve(material, exinputfile)) {
+		fprintf(stderr, "No melting curve table found.\n");
+	}
+
 	return material;
 }
 
@@ -241,6 +249,10 @@ void ANEOSfinalizeMaterial(ANEOSMATERIAL *material)
         }
 	free(material->PhaseArray);
     }
+
+	if (material->T_melt != NULL) {
+		free(material->T_melt);
+	}
 
 	free(material->rhoAxis);
 	free(material->TAxis);
@@ -321,6 +333,52 @@ int ANEOSReadExtendedTable(ANEOSMATERIAL *material, char *inputfile)
 	}
 	
 	fclose(file);
+
+    return 0;
+}
+
+/*
+ * Read the melt curve.
+ */
+int ANEOSReadMeltCurve(ANEOSMATERIAL *material, char *inputfile)
+{
+	FILE *file;
+	int nRho;
+
+    if (material == NULL) {
+        fprintf(stderr, "ANEOSReadMeltCurve: ANEOSmaterial not initialized.\n");
+        assert(0);
+    }
+
+	if ((file= fopen(inputfile, "rb")) == NULL)
+	{
+		//fprintf(stderr, "ANEOSReadMeltCurve: Could not open file %s\n", inputfile);
+		return 1;
+	}
+
+    /* If the file exists we assume it should be readable. */
+	if (fread(&nRho, sizeof(nRho), 1, file) == 0)
+	{
+		fprintf(stderr, "ANEOSReadMeltCurve: Failed to read from file %s\n", inputfile);
+		assert(0);
+	}
+
+    if (material->nRho != nRho) {
+		fprintf(stderr, "ANEOSReadMeltCurve: Inconsistent number of grid points.\n");
+        assert(0);
+    }
+
+	double *T_melt = (double *)malloc(sizeof(double)*nRho);
+
+	if (fread(T_melt, sizeof(T_melt[0]), nRho, file) == 0)
+	{
+	    fprintf(stderr, "ANEOSReadMeltCurve: Failed to read from file %s\n", inputfile);
+	    assert(0);
+	}
+
+	fclose(file);
+
+	material->T_melt = T_melt;
 
     return 0;
 }
@@ -588,6 +646,21 @@ double ANEOSSofRhoT(ANEOSMATERIAL *material, double rho, double T)
 	double S = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->sArray);
 	if (S<-1e40){fprintf(stderr,"ANEOSSofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);}
     return S;
+}
+
+/*
+ * Calculates melting temperature T_melt(rho)
+ */
+double ANEOSTmeltofRho(ANEOSMATERIAL *material, double rho)
+{
+	/* Check if melting curve was loaded. */
+	if (material->T_melt == NULL) {
+		fprintf(stderr, "ANEOSTmeltofRho: Melt curve was not loaded.\n");
+		assert(0);
+	}
+	/* Return 0 if the melt curve is not defined or interpolation fails */
+	double T = interpolateValueLinear(rho*material->CodeUnitstoCGSforRho, material->nRho, material->rhoAxis, material->T_melt);
+	return T;
 }
 
 /*
