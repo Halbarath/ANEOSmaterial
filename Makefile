@@ -110,6 +110,9 @@ findPhaseBoundary: findPhaseBoundary.o $(objects) $(fortran_objects)
 printMeltCurve: printMeltCurve.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+readMeltCurve: readMeltCurve.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 # Direct call to M-ANEOS. Be sure to compile with the correct object files.
 maneoscall: maneoscall.o $(objects) $(fortran_objects) 
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
