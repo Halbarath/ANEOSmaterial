@@ -322,12 +322,6 @@ int main(int argc, char *argv[])
         T_melt[i] = T;
     }
 
-    fp = fopen("tmelt.txt", "w");
-    for (int i=0; i<nRho; i++) {
-        fprintf(fp, "%15.7E%15.7E\n", rhoAxis[i], T_melt[i]);
-    }
-    fclose(fp);
-#if 0
     /* Write melting curve to a lookup table*/
     char exoutputfile[256] = "";
     strcpy(exoutputfile, outputfile);
@@ -339,7 +333,7 @@ int main(int argc, char *argv[])
     fwrite(T_melt, sizeof(T_melt[0]), nRho, file);
 
     fclose(fp);
-#endif
+
     fprintf(stderr, "Finished, exiting\n");
     return 0;
 }
