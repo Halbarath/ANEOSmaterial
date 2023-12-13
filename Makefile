@@ -71,6 +71,9 @@ testMANEOStable: testMANEOStable.o $(mylibobjects) $(fortran_objects) $(objects)
 testMANEOStableint: testMANEOStableint.o $(mylibobjects) $(fortran_objects) $(objects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+testmaneosdirect: testmaneosdirect.o aneosdirect.o $(objects) $(fortran_objects)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 calcPressureRhoT: calcPressureRhoT.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
@@ -105,6 +108,9 @@ aneoscall: aneoscall.o $(objects) $(fortran_objects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 findPhaseBoundary: findPhaseBoundary.o $(objects) $(fortran_objects)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+calcDensityPTMANEOS: calcDensityPTMANEOS.o aneosdirect.o $(objects) $(fortran_objects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 printMeltCurve: printMeltCurve.o $(mylibobjects)
