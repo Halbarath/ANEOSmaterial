@@ -5,6 +5,8 @@ Plot the pressure table generated with writePhaseDirect.
 from __future__ import print_function
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from matplotlib import cm, ticker
+import matplotlib.colors as colors
 import numpy as np
 import argparse
 
@@ -61,21 +63,31 @@ def main():
     rho = rho[index_rho_min:]
     press = press[:,index_rho_min:]
 
+    # Cutoff pressure at 1e4
+    press_cutoff = 1e4
+    press[np.where(np.logical_and(press > 0.0, press <= press_cutoff))] = press_cutoff
+
     press_min = np.min(press)
     press_max = np.max(press)
-  
+
+    # This suppresses a warning when P < 0 
+    press = np.ma.masked_where(press <= 0, press)
+
     # Plot the pressure
     fig, ax = plt.subplots(1,1)
 
-    plt.contour(np.log10(rho), np.log10(T), np.log10(press), levels=np.linspace(-20, np.log10(press_max), 20), colors='black', linewidths=0.5)
-    plt.contourf(np.log10(rho), np.log10(T), np.log10(press), levels=np.linspace(-20, np.log10(press_max), 20), extend='min')
-    plt.colorbar()
+    lev_exp = np.linspace(np.log10(press_cutoff), np.log10(press_max), 20)
+    levs = np.power(10, lev_exp)
+    cs = ax.contourf(np.log10(rho), np.log10(T), press, levs, norm=colors.LogNorm())
+
+    cbar = fig.colorbar(cs, format=ticker.StrMethodFormatter("{x:.0E}"))
+    plt.contour(np.log10(rho), np.log10(T), press, levs, norm=colors.LogNorm(), colors='black', linewidths=0.5)
 
     plt.xlabel("Log(Density) [g cm$^{-3}$]")
     plt.ylabel("Log(Temperature) [K]")
 
     output = "{:}.press.png".format(file)
-    plt.savefig(output, dpi=300, bbox_inches='tight')
+    plt.savefig(output, dpi=100, bbox_inches='tight')
 
     exit(0)
 
