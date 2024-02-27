@@ -29,7 +29,7 @@
 int main(int argc, char *argv[])
 {
 	if (argc != 2) {
-        fprintf(stderr,"Usage: writePhase <aneos.input>\n");
+        fprintf(stderr,"Usage: writePressureMANEOS <aneos.input>\n");
         exit(1);
     }
 	
@@ -78,16 +78,14 @@ int main(int argc, char *argv[])
 	
 	fclose(fp);
 
-
-	int **phaseArray = (int **)malloc(sizeof(int*)*nT);
+    double **pArray = (double **)malloc(sizeof(double*)*nT);
     for (int i=0; i<nT; i++)
 	{
-		phaseArray[i] = (int *)malloc(nRho * sizeof(int)); 
+		pArray[i] = (double *)malloc(nRho * sizeof(double)); 
 	}
 	
 	double T;
     double rho;
-	double p;
 	double u;
 	double s;
     double cv;
@@ -95,6 +93,7 @@ int main(int argc, char *argv[])
 	double dPdrho;
     double fkros;
 	double c;
+	int phase;
     double rhoL;
     double rhoH;
     double ion;
@@ -109,18 +108,18 @@ int main(int argc, char *argv[])
 			T = TAxis[i];
 			rho = rhoAxis[j];
 					
-			callaneos_cgs(T, rho, iMat, &p, &u, &s, &cv, &dPdT,
-				&dPdrho, &fkros, &c, &phaseArray[i][j], &rhoL, &rhoH, &ion);
+			callaneos_cgs(T, rho, iMat, &pArray[i][j], &u, &s, &cv, &dPdT,
+				&dPdrho, &fkros, &c, &phase, &rhoL, &rhoH, &ion);
 		}
 	}
 	
-	fp = fopen("phase.txt", "w");
+	fp = fopen("pressure.txt", "w");
 
 	for (int i = 0; i<nT; i++)
 	{
 		for (int j = 0; j<nRho; j++)
 		{
-			fprintf(fp," %d", phaseArray[i][j]);
+			fprintf(fp," %.7E", pArray[i][j]);
 		}
 		fprintf(fp,"\n");
 	}
