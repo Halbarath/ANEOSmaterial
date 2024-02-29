@@ -25,6 +25,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "aneos.h"
 
 int main(int argc, char *argv[])
@@ -35,6 +36,26 @@ int main(int argc, char *argv[])
     }
 	
 	int iMat = atoi(argv[1]);
+
+	char matStr[256] = "";
+
+	switch(iMat) {
+		case 1:
+			strcpy(matStr, "M-ANEOS-ICE");
+			break;
+		case 2:
+			strcpy(matStr, "ANEOS-ICE");
+			break;
+		case 4:
+			strcpy(matStr, "ANEOS-DUNITE");
+			break;
+		case 5:
+			strcpy(matStr, "ANEOS-IRON");
+			break;
+		default:
+            fprintf(stderr, "Unknown material id: %i\n", iMat);
+            exit(1);
+    }
 
 	char axesFilename[256] = "axes.in";
 	
@@ -116,6 +137,7 @@ int main(int argc, char *argv[])
 	}
 	
 	fp = fopen("phase.txt", "w");
+	fprintf(fp, "# Material: %s\n", matStr);
 
 	for (int i = 0; i<nT; i++)
 	{

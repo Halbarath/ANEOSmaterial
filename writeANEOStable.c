@@ -47,15 +47,19 @@ int main(int argc, char *argv[])
     switch(iMat)
     {
         case 1:
+            /* New water EOS for M-ANEOS which has never been completed */
             rho0 = 1.1;
             break;
         case 2:
+            /* ANEOS ice */
             rho0 = 1.11;
             break;
         case 4:
+            /* ANEOS dunite (without molecules) */
             rho0 = 3.32;
             break;
         case 5:
+            /* ANEOS iron */
             rho0 = 7.85;
             break;
         default:
@@ -266,6 +270,69 @@ int main(int argc, char *argv[])
     }
 
     fclose(file);
+
+    /* Write melting curve T_melt(rho) */
+    double p;
+    double u;
+    double s;
+    double c;
+    int phase;
+
+    /* Phase id for a solid */
+    const int phase_id_solid = 4;
+
+    double *T_melt = (double *)malloc(nRho * sizeof(double));
+
+    for (int i=0; i<nRho; i++) {
+        double T = TAxis[0];
+        double Ta = TAxis[0];
+        double Tb = TAxis[0];
+        double rho = rhoAxis[i];
+
+        callaneos_cgs(T, rho, iMat, &p, &u, &s, &cv, &dPdT, &dPdrho, &fkros, &c, &phase, &rhoL, &rhoH, &ion);
+
+        /* Check if the is no solid phase even at T_min */
+        if (phase != phase_id_solid) {
+            T_melt[i] = 0.0;
+            continue;
+        }
+
+        /* Find upper limit */
+        while (phase == phase_id_solid) {
+            Ta = Tb;
+            Tb *= 2.0;
+
+            callaneos_cgs(Tb, rho, iMat, &p, &u, &s, &cv, &dPdT, &dPdrho, &fkros, &c, &phase, &rhoL, &rhoH, &ion);
+        }
+
+        while ((Tb - Ta)/T > 1e-8) {
+            T = 0.5*(Ta + Tb);
+
+            callaneos_cgs(T, rho, iMat, &p, &u, &s, &cv, &dPdT, &dPdrho, &fkros, &c, &phase, &rhoL, &rhoH, &ion);
+
+            if (phase == phase_id_solid) {
+                Ta = T;
+            } else {
+                Tb = T;
+            }
+
+            //fprintf(stderr, "Root bracketed: rho=%15.7E T=%15.7E Ta=%15.7E Tb=%15.7E phase= %i\n", rho, T, Ta, Tb, phase);
+        }
+
+        T_melt[i] = T;
+    }
+
+    /* Write melting curve to a lookup table*/
+    char exoutputfile[256] = "";
+    strcpy(exoutputfile, outputfile);
+    strcat(exoutputfile, "_tmelt");
+
+    file = fopen(exoutputfile, "wb");
+
+    fwrite(&nRho, sizeof(nRho), 1, file);
+    fwrite(T_melt, sizeof(T_melt[0]), nRho, file);
+
+    fclose(fp);
 
     fprintf(stderr, "Finished, exiting\n");
     return 0;

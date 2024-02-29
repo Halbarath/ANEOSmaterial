@@ -361,3 +361,42 @@ int findIndex(double x, double* xAxis, int nX)
     }
     return i;
 }
+
+/*
+ * Interpolate a value using linear interpolation
+ */
+double interpolateValueLinear(double x, int nX, double* xAxis, double* yAxis)
+{
+    // check if x is out of bounds
+    if (x < xAxis[0])
+    {
+#ifdef EOSLIB_VERBOSE
+        fprintf(stderr,"ANEOS interpolateValueLinear failed, x = %.15e is smaller than minx = %.15e\n", x, xAxis[0]);
+#endif
+        return -1e50;
+    }
+    if (x >= xAxis[nX-1])
+    {
+#ifdef EOSLIB_VERBOSE
+        fprintf(stderr,"ANEOS interpolateValueLinear failed, x = %.15e is larger than maxx = %.15e\n", x, xAxis[nX-1]);
+#endif
+        return -1e50;
+    }
+
+    // searching for grid rectangle containing the point
+    // could be calculated if grid is guarantied to be logarithmic
+    // as we do not assume that, we search for the grid rectangle
+    int i=findIndex(x, xAxis, nX);
+
+    // scaling grid rectangle to unit square
+    x = (x-xAxis[i])/(xAxis[i+1]-xAxis[i]);
+
+    // calculating linear interpolation
+    double f0=yAxis[i];
+    double f1=yAxis[i+1];
+
+    double y = -1e50;
+
+    y = f0*(1.0 - x) + f1*x;
+    return y;
+}
