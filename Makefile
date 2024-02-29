@@ -98,6 +98,9 @@ writePhaseANEOS: writePhaseANEOS.o $(objects) $(fortran_objects)
 writePhaseMANEOS: writePhaseMANEOS.o $(objects) $(fortran_objects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+writePressureMANEOS: writePressureMANEOS.o $(objects) $(fortran_objects)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 writePressureTable: writePressureTable.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
