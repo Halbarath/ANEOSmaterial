@@ -221,7 +221,7 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
     strcat(exinputfile, "_tmelt");
 
 	if (ANEOSReadMeltCurve(material, exinputfile)) {
-		fprintf(stderr, "No melting curve table found.\n");
+		//fprintf(stderr, "No melting curve table found.\n");
 	}
 
 	return material;
