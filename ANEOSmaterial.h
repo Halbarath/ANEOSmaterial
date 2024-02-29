@@ -110,7 +110,6 @@ double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double 
 
 double ANEOSSofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSSofRhoT(ANEOSMATERIAL *material, double rho, double T);
-double ANEOSTmeltofRho(ANEOSMATERIAL *material, double rho);
 
 double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSdPdUofRhoU(ANEOSMATERIAL *material, double rho, double u);
