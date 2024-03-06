@@ -126,4 +126,6 @@ double ANEOSdUdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSdPdRhoofRhoT(ANEOSMATERIAL *material, double rho, double T);
 double ANEOSdPdTofRhoT(ANEOSMATERIAL *material, double rho, double T);
 
+int ANEOSYieldParameters(ANEOSMATERIAL *material, double *Y0, double *YM, double *mui, double *xi);
+
 void ANEOSPrintMat(ANEOSMATERIAL *material, FILE *fp);
