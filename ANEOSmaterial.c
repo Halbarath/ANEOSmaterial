@@ -227,6 +227,14 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
 		//fprintf(stderr, "No melting curve table found.\n");
 	}
 
+    /* Read yield parameters (optional) */
+    strcpy(exinputfile, inputfile);
+    strcat(exinputfile, "_yield");
+
+    if (ANEOSReadYieldParameters(material, exinputfile)) {
+        fprintf(stderr, "No yield parameters found.\n");
+    }
+
 	return material;
 }
 
@@ -382,6 +390,80 @@ int ANEOSReadMeltCurve(ANEOSMATERIAL *material, char *inputfile)
 	fclose(file);
 
 	material->T_melt = T_melt;
+
+    return 0;
+}
+
+/*
+ * Read the yield parameters.
+ */
+int ANEOSReadYieldParameters(ANEOSMATERIAL *material, char *inputfile)
+{
+	FILE *file;
+    int bufferLength = 255;
+    char buffer[bufferLength];
+    char parameterString[bufferLength];
+    char valueString[bufferLength];
+
+    if (material == NULL) {
+        fprintf(stderr, "ANEOSReadYieldParameters: ANEOSmaterial not initialized.\n");
+        assert(0);
+    }
+
+	if ((file= fopen(inputfile, "r")) == NULL)
+	{
+		fprintf(stderr, "ANEOSReadYieldParameters: Could not open file %s\n", inputfile);
+        material->yieldStrengthModel = 0; // No Yield strength available
+		return 1;
+	}
+
+    material->yieldStrengthModel = -1;
+    material->Y0 = -1.0;
+    material->YM = -1.0;
+    material->mui = -1.0;
+    material->xi = -1.0;
+
+    while(fgets(buffer, bufferLength, file)) {
+        if (buffer[0] == '#') continue;
+        if (buffer[0] == '\n') continue;
+        if (buffer[0] == '\r') continue;
+        char *token = strtok(buffer, "=");
+        strcpy(parameterString,token);
+        token = strtok(NULL, "=");
+        strcpy(valueString,token);
+        if (strcmp(parameterString,"yieldStrengthModel") == 0) {
+            sscanf(valueString, "%d", &material->yieldStrengthModel);
+            printf("yieldStrengthModel = %d\n",material->yieldStrengthModel);
+        }
+        else if (strcmp(parameterString,"Y0") == 0) {
+            sscanf(valueString, "%lf", &material->Y0);
+            printf("Y0 = %e\n",material->Y0);
+        }
+        else if (strcmp(parameterString,"YM") == 0) {
+            sscanf(valueString, "%lf", &material->YM);
+            printf("YM = %e\n",material->YM);
+        }
+        else if (strcmp(parameterString,"mui") == 0) {
+            sscanf(valueString, "%lf", &material->mui);
+            printf("mui = %e\n",material->mui);
+        }
+        else if (strcmp(parameterString,"xi") == 0) {
+            sscanf(valueString, "%lf", &material->xi);
+            printf("xi = %e\n",material->xi);
+        }
+        else {
+            fprintf(stderr,"ANEOSReadYieldParameters: Unknown parameter found: %s\n", parameterString);
+            fclose(file);
+            assert(0);
+        }
+    }
+
+    fclose(file);
+
+    if ((material->yieldStrengthModel < 0) || (material->Y0 < 0.0) || (material->YM < 0.0) || (material->mui < 0.0) || (material->xi < 0.0)) {
+        fprintf(stderr, "ANEOSReadYieldParameters: Error while reading parameters\n");
+        assert(0);
+    }
 
     return 0;
 }

@@ -67,6 +67,13 @@ typedef struct ANEOSmaterial
     // Melt curve (optional)
 	double *T_melt;
 
+    // Yield parameters (optional)
+    int yieldStrengthModel;
+    double Y0; // Yield strength at 0 pressure
+    double YM; // Yield strength at infinite pressure
+    double mui; // coefficient of internal friction
+    double xi; // thermal softening parameter
+
 } ANEOSMATERIAL;
 
 // Initialization and finalization
@@ -77,6 +84,7 @@ void ANEOSfinalizeMaterial(ANEOSMATERIAL *material);
 
 int ANEOSReadExtendedTable(ANEOSMATERIAL *material, char *inputfile);
 int ANEOSReadMeltCurve(ANEOSMATERIAL *material, char *inputfile);
+int ANEOSReadYieldParameters(ANEOSMATERIAL *material, char *inputfile);
 
 // Access functions
 
