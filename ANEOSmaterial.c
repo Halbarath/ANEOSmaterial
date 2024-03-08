@@ -826,10 +826,10 @@ double ANEOSdPdTofRhoT(ANEOSMATERIAL *material, double rho, double T)
  * Return yield strength parameters in code units
  */
 int ANEOSYieldParameters(ANEOSMATERIAL *material, double *Y0, double *YM, double *mui, double *xi) {
-    *Y0 = material->Y0 / material->CodeUnitstoCGSforP;
-    *YM = material->YM / material->CodeUnitstoCGSforP;
-    *mui = material->mui;
-    *xi = material->xi;
+    if (Y0) *Y0 = material->Y0 / material->CodeUnitstoCGSforP;
+    if (YM) *YM = material->YM / material->CodeUnitstoCGSforP;
+    if (mui) *mui = material->mui;
+    if (xi) *xi = material->xi;
     return material->yieldStrengthModel;
 }
 

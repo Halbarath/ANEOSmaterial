@@ -47,8 +47,6 @@ RHO0="3.22"
 OUTPUT="MANEOStable_fosterite.in"
 MAT_STR="M-ANEOS forsterite ($DATE, Stewart 2019: http://doi.org/10.5281/zenodo.3478631)"
 
-"./$MANEOS_EXE" "$INPUT" "$RHO0" "$OUTPUT" "$MAT_STR" 1> /dev/null 2>&1
-
 if [ -e "$INPUT" ]; then
     "./$MANEOS_EXE" "$INPUT" "$RHO0" "$OUTPUT" "$MAT_STR" 1> /dev/null 2>&1
 else
