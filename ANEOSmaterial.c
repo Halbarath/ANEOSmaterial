@@ -240,8 +240,8 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
         //fprintf(stderr, "No yield parameters found.\n");
     }
 
-    if (material->yieldStrengthModel && material->T_melt == NULL) {
-        material->yieldStrengthModel = 0;
+    if (material->yieldStrengthModel >= 0 && material->T_melt == NULL) {
+        material->yieldStrengthModel = -1;
     }
 
 	return material;
@@ -422,7 +422,7 @@ int ANEOSReadYieldParameters(ANEOSMATERIAL *material, char *inputfile)
 	if ((file= fopen(inputfile, "r")) == NULL)
 	{
 		// fprintf(stderr, "ANEOSReadYieldParameters: Could not open file %s\n", inputfile);
-        material->yieldStrengthModel = 0; // No Yield strength available
+        material->yieldStrengthModel = -1; // No Yield strength available
 		return 1;
 	}
 
