@@ -110,10 +110,10 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
 	material->nT = nT;
 	strcpy(material->matName,inputfile);
 	
-	material->CodeUnitstoCGSforU = 1;
-	material->CodeUnitstoCGSforP = 1;
-	material->CodeUnitstoCGSforRho = 1;
-	material->CodeUnitstoCGSforC = 1;
+	material->CodeUnitstoCGSforU = 1.0;
+	material->CodeUnitstoCGSforP = 1.0;
+	material->CodeUnitstoCGSforRho = 1.0;
+	material->CodeUnitstoCGSforC = 1.0;
 	
 	if (dKpcUnit > 0.0 && dMsolUnit > 0.0)
 	{
@@ -131,6 +131,11 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
 	// unit of c is cm/s
 	material->CodeUnitstoCGSforC = dKpcUnit*KPCCM*sqrt((material->CodeUnitstoCGSforRho*GCGS));
 	}
+
+    material->CGStoCodeUnitsforU = 1.0 / material->CodeUnitstoCGSforU;
+    material->CGStoCodeUnitsforP = 1.0 / material->CodeUnitstoCGSforP;
+    material->CGStoCodeUnitsforRho = 1.0 / material->CodeUnitstoCGSforRho;
+    material->CGStoCodeUnitsforC = 1.0 / material->CodeUnitstoCGSforC;
 
 	double *rhoAxis = (double *)malloc(sizeof(double)*nRho);
 	double *TAxis = (double *)malloc(sizeof(double)*nT);
@@ -472,7 +477,7 @@ int ANEOSReadYieldParameters(ANEOSMATERIAL *material, char *inputfile)
  */
 double ANEOSgetRho0(ANEOSMATERIAL *material)
 {
-	return material->rho0/material->CodeUnitstoCGSforRho;
+	return material->rho0 * material->CGStoCodeUnitsforRho;
 }
 
 /*
@@ -528,7 +533,7 @@ double ANEOSUofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
 	double u = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->uArray);
 	if (u<-1e40){fprintf(stderr,"ANEOSUofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);}
-	u /= material->CodeUnitstoCGSforU;
+	u *= material->CGStoCodeUnitsforU;
 	return u;
 }
 
@@ -559,7 +564,7 @@ double ANEOSPofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
 	double p = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->pArray);
 	if (p<-1e40){fprintf(stderr,"ANEOSPofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);}
-	p /= material->CodeUnitstoCGSforP;
+	p *= material->CGStoCodeUnitsforP;
 	return p;
 }
 
@@ -580,7 +585,7 @@ double ANEOSRhoofUT(ANEOSMATERIAL *material, double u, double T)
 {
 	double rho = backwardInterpolateDensityBilinear(T,u*material->CodeUnitstoCGSforU,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->uArray);
 	if (rho<-1e40){fprintf(stderr,"ANEOSRhoofUT failed for u = %.15e, T = %.15e\n", u, T);}
-	rho /= material->CodeUnitstoCGSforRho;
+	rho *= material->CGStoCodeUnitsforRho;
 	return rho;
 }
 
@@ -591,7 +596,7 @@ double ANEOSRhoofPT(ANEOSMATERIAL *material, double p, double T)
 {
 	double rho = backwardInterpolateDensityBilinear(T,p*material->CodeUnitstoCGSforP,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->pArray);
 	if (rho<-1e40){fprintf(stderr,"ANEOSRhoofPT failed for p = %.15e, T = %.15e\n", p, T);}
-	rho /= material->CodeUnitstoCGSforRho;
+	rho *= material->CGStoCodeUnitsforRho;
 	return rho;
 }
 
@@ -628,8 +633,8 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 		}
 	}
 	
-	double a = material->rhoAxis[k]/material->CodeUnitstoCGSforRho;
-	double b = material->rhoAxis[k+1]/material->CodeUnitstoCGSforRho;
+	double a = material->rhoAxis[k] * material->CGStoCodeUnitsforRho;
+	double b = material->rhoAxis[k+1] * material->CGStoCodeUnitsforRho;
 
 	double c;
 	
@@ -674,7 +679,7 @@ double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
 	double c = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->cArray);
 	if (c<-1e40){fprintf(stderr,"ANEOSCofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);}
-	c /= material->CodeUnitstoCGSforC;
+	c *= material->CGStoCodeUnitsforC;
 	return c;
 }
 
@@ -826,8 +831,8 @@ double ANEOSdPdTofRhoT(ANEOSMATERIAL *material, double rho, double T)
  * Return yield strength parameters in code units
  */
 int ANEOSYieldParameters(ANEOSMATERIAL *material, double *Y0, double *YM, double *mui, double *xi) {
-    if (Y0) *Y0 = material->Y0 / material->CodeUnitstoCGSforP;
-    if (YM) *YM = material->YM / material->CodeUnitstoCGSforP;
+    if (Y0) *Y0 = material->Y0 * material->CGStoCodeUnitsforP;
+    if (YM) *YM = material->YM * material->CGStoCodeUnitsforP;
     if (mui) *mui = material->mui;
     if (xi) *xi = material->xi;
     return material->yieldStrengthModel;
@@ -836,7 +841,7 @@ int ANEOSYieldParameters(ANEOSMATERIAL *material, double *Y0, double *YM, double
 void ANEOSPrintMat(ANEOSMATERIAL *material, FILE *fp)
 {
 	fprintf(fp,"# Material: %i (%s)\n", material->iMat, material->matName);
-	fprintf(fp,"# Reference density rho0: %g\n", material->rho0/material->CodeUnitstoCGSforRho);
+	fprintf(fp,"# Reference density rho0: %g\n", material->rho0 * material->CGStoCodeUnitsforRho);
 	fprintf(fp,"# Table size: nRho = %d, nT = %d\n", material->nRho, material->nT);
     fprintf(fp,"# Table boundaries (cgs units): minRho = %g, maxRho = %g, minT = %g, maxT = %g\n",material->rhoAxis[0],material->rhoAxis[material->nRho-1],material->TAxis[0],material->TAxis[material->nT-1]);
     fprintf(fp,"# %s\n",material->matstring);

@@ -52,6 +52,10 @@ typedef struct ANEOSmaterial
 	double CodeUnitstoCGSforP;
 	double CodeUnitstoCGSforRho;
 	double CodeUnitstoCGSforC;
+    double CGStoCodeUnitsforU;
+    double CGStoCodeUnitsforP;
+    double CGStoCodeUnitsforRho;
+    double CGStoCodeUnitsforC;
 	
 	// interpolation arrays, array of array of pointers
 	double *rhoAxis;
