@@ -48,7 +48,7 @@ execs = testANEOSmaterial writeANEOStable writeMANEOStable writePhase writePress
 GSL_LIB = -lgsl -lgslcblas
 FC := gfortran
 
-CFLAGS ?= -O3 -Wall -std=c99
+CFLAGS ?= -O3 -Wall
 
 #FFLAGS ?= $(CFLAGS) -std=legacy
 FFLAGS = -O3

@@ -436,9 +436,10 @@ int ANEOSReadYieldParameters(ANEOSMATERIAL *material, char *inputfile)
         if (buffer[0] == '#') continue;
         if (buffer[0] == '\n') continue;
         if (buffer[0] == '\r') continue;
-        char *token = strtok(buffer, "=");
+        char *rest = buffer;
+        char *token = strtok_r(rest, "=", &rest);
         strcpy(parameterString,token);
-        token = strtok(NULL, "=");
+        token = strtok_r(rest, "=", &rest);
         strcpy(valueString,token);
         if (strcmp(parameterString,"yieldStrengthModel") == 0) {
             sscanf(valueString, "%d", &material->yieldStrengthModel);
