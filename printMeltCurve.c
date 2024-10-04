@@ -50,11 +50,17 @@ int main(int argc, char *argv[]) {
 	material = ANEOSinitMaterial(iMat, dKpcUnit, dMsolUnit);
 
     printf("# iMat= %i nRho= %i\n", material->iMat, material->nRho);
+    printf("#%14s%15s%15s\n", "rho", "T", "P");
 
     for (int i=0; i<material->nRho; i++) {
 		double rho = material->rhoAxis[i];
 		double T_melt = ANEOSTmeltofRho(material, rho);
-        printf("%15.7E%15.7E\n", rho, T_melt);
+        double P_melt = ANEOSPofRhoT(material, rho, T_melt);
+
+        // Set P = 0 if T_melt = 0
+        if (P_melt < 0.0) P_melt = 0.0;
+
+        printf("%15.7E%15.7E%15.7E\n", rho, T_melt, P_melt);
     }
 
     return 0;
