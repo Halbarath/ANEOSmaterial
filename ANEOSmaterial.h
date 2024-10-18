@@ -90,7 +90,7 @@ void ANEOSfinalizeMaterial(ANEOSMATERIAL *material);
 
 int ANEOSReadExtendedTable(ANEOSMATERIAL *material, char *inputfile);
 int ANEOSReadMeltCurve(ANEOSMATERIAL *material, char *inputfile);
-int ANEOSReadYieldParameters(ANEOSMATERIAL *material, char *inputfile);
+int ANEOSReadStrengthParameters(ANEOSMATERIAL *material, char *inputfile);
 
 // Access functions
 
@@ -132,7 +132,7 @@ double ANEOSdUdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSdPdRhoofRhoT(ANEOSMATERIAL *material, double rho, double T);
 double ANEOSdPdTofRhoT(ANEOSMATERIAL *material, double rho, double T);
 
-int ANEOSReadStrengthParameters(ANEOSMATERIAL *material, double *Y0, double *YM, double *mui, double *xi);
+int ANEOSYieldParameters(ANEOSMATERIAL *material, double *Y0, double *YM, double *mui, double *xi);
 double ANEOSGammaofRhoT(ANEOSMATERIAL *material, double rho, double T);
 
 void ANEOSPrintMat(ANEOSMATERIAL *material, FILE *fp);
