@@ -232,12 +232,12 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
 		//fprintf(stderr, "No melting curve table found.\n");
 	}
 
-    /* Read yield parameters (optional) */
+    /* Read strength parameters (optional) */
     strcpy(exinputfile, inputfile);
-    strcat(exinputfile, "_yield");
+    strcat(exinputfile, "_strength");
 
-    if (ANEOSReadYieldParameters(material, exinputfile)) {
-        //fprintf(stderr, "No yield parameters found.\n");
+    if (ANEOSReadStrengthParameters(material, exinputfile)) {
+        //fprintf(stderr, "No strength parameters found.\n");
     }
 
     if (material->yieldStrengthModel >= 0 && material->T_melt == NULL) {
@@ -404,9 +404,9 @@ int ANEOSReadMeltCurve(ANEOSMATERIAL *material, char *inputfile)
 }
 
 /*
- * Read the yield parameters.
+ * Read the strength parameters.
  */
-int ANEOSReadYieldParameters(ANEOSMATERIAL *material, char *inputfile)
+int ANEOSReadStrengthParameters(ANEOSMATERIAL *material, char *inputfile)
 {
 	FILE *file;
     int bufferLength = 255;
@@ -415,13 +415,13 @@ int ANEOSReadYieldParameters(ANEOSMATERIAL *material, char *inputfile)
     char valueString[bufferLength];
 
     if (material == NULL) {
-        fprintf(stderr, "ANEOSReadYieldParameters: ANEOSmaterial not initialized.\n");
+        fprintf(stderr, "ANEOSReadStrengthParameters: ANEOSmaterial not initialized.\n");
         assert(0);
     }
 
 	if ((file= fopen(inputfile, "r")) == NULL)
 	{
-		// fprintf(stderr, "ANEOSReadYieldParameters: Could not open file %s\n", inputfile);
+		// fprintf(stderr, "ANEOSReadStrengthParameters: Could not open file %s\n", inputfile);
         material->yieldStrengthModel = -1; // No Yield strength available
 		return 1;
 	}
@@ -431,6 +431,8 @@ int ANEOSReadYieldParameters(ANEOSMATERIAL *material, char *inputfile)
     material->YM = -1.0;
     material->mui = -1.0;
     material->xi = -1.0;
+    material->Gamma = -2.0;
+    material->fixedGamma = 1;
 
     while(fgets(buffer, bufferLength, file)) {
         if (buffer[0] == '#') continue;
@@ -456,6 +458,13 @@ int ANEOSReadYieldParameters(ANEOSMATERIAL *material, char *inputfile)
         else if (strcmp(parameterString,"xi") == 0) {
             sscanf(valueString, "%lf", &material->xi);
         }
+        else if (strcmp(parameterString,"Gamma") == 0) {
+            sscanf(valueString, "%lf", &material->Gamma);
+            if (material->Gamma == -1.0) {
+                material->fixedGamma = 0;
+                material->Gamma = 0.0;
+            }
+        }
         else {
             fprintf(stderr,"ANEOSReadYieldParameters: Unknown parameter found: %s\n", parameterString);
             fclose(file);
@@ -465,7 +474,7 @@ int ANEOSReadYieldParameters(ANEOSMATERIAL *material, char *inputfile)
 
     fclose(file);
 
-    if ((material->yieldStrengthModel < 0) || (material->Y0 < 0.0) || (material->YM < 0.0) || (material->mui < 0.0) || (material->xi < 0.0)) {
+    if ((material->yieldStrengthModel < 0) || (material->Y0 < 0.0) || (material->YM < 0.0) || (material->mui < 0.0) || (material->xi < 0.0) || (material->Gamma < 0.0)) {
         fprintf(stderr, "ANEOSReadYieldParameters: Error while reading parameters\n");
         assert(0);
     }
@@ -837,6 +846,22 @@ int ANEOSYieldParameters(ANEOSMATERIAL *material, double *Y0, double *YM, double
     if (mui) *mui = material->mui;
     if (xi) *xi = material->xi;
     return material->yieldStrengthModel;
+}
+
+/*
+ * Return shear modulus in code units
+ */
+double ANEOSGammaofRhoT(ANEOSMATERIAL *material, double rho, double T) {
+    if (material->fixedGamma) {
+        return material->Gamma * material->CGStoCodeUnitsforP;
+    } else {
+        // We guess nu = 0.25 as "normal" materials have nu \in [0.2,0.3]
+        // and the difference in the resulting shear modulus is less then 25%
+        double nu = 0.25;
+        double c = ANEOSCofRhoT(material, rho, T);
+        double bulkModulus = rho * c * c;
+        return bulkModulus * 3.0 * (1.0 - 2.0 * nu) / (2.0 * (1.0 + nu));
+    }
 }
 
 void ANEOSPrintMat(ANEOSMATERIAL *material, FILE *fp)
