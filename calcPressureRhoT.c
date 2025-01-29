@@ -26,8 +26,10 @@
 
 int main(int argc, char *argv[])
 {
-	double dKpcUnit = 2.06701e-13;
-	double dMsolUnit = 4.80438e-08;
+	//double dKpcUnit = 2.06701e-13;
+	//double dMsolUnit = 4.80438e-08;
+	double dKpcUnit = 0.0;
+	double dMsolUnit = 0.0;
 	
 	if (argc != 4) {
         fprintf(stderr,"Usage: calcPressureRhoT <iMat> <rho> <T>\n");
