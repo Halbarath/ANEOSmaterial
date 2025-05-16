@@ -430,6 +430,7 @@ int ANEOSReadStrengthParameters(ANEOSMATERIAL *material, char *inputfile)
     material->Y0 = -1.0;
     material->YM = -1.0;
     material->mui = -1.0;
+    material->mud = -1.0;
     material->xi = -1.0;
     material->Gamma = -2.0;
     material->fixedGamma = 1;
@@ -454,6 +455,9 @@ int ANEOSReadStrengthParameters(ANEOSMATERIAL *material, char *inputfile)
         }
         else if (strcmp(parameterString,"mui") == 0) {
             sscanf(valueString, "%lf", &material->mui);
+        }
+        else if (strcmp(parameterString,"mud") == 0) {
+            sscanf(valueString, "%lf", &material->mud);
         }
         else if (strcmp(parameterString,"xi") == 0) {
             sscanf(valueString, "%lf", &material->xi);
@@ -840,10 +844,11 @@ double ANEOSdPdTofRhoT(ANEOSMATERIAL *material, double rho, double T)
 /*
  * Return yield strength parameters in code units
  */
-int ANEOSYieldParameters(ANEOSMATERIAL *material, double *Y0, double *YM, double *mui, double *xi) {
+int ANEOSYieldParameters(ANEOSMATERIAL *material, double *Y0, double *YM, double *mui, double *mud, double *xi) {
     if (Y0) *Y0 = material->Y0 * material->CGStoCodeUnitsforP;
     if (YM) *YM = material->YM * material->CGStoCodeUnitsforP;
     if (mui) *mui = material->mui;
+    if (mud) *mud = material->mud;
     if (xi) *xi = material->xi;
     return material->yieldStrengthModel;
 }
