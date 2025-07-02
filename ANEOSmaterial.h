@@ -75,7 +75,8 @@ typedef struct ANEOSmaterial
     int yieldStrengthModel;
     double Y0; // Yield strength at 0 pressure
     double YM; // Yield strength at infinite pressure
-    double mui; // coefficient of internal friction
+    double mui; // coefficient of internal friction for intact material
+    double mud; // coefficient of internal friction for damaged material
     double xi; // thermal softening parameter
     double Gamma; // Shear modulus
     int fixedGamma;
@@ -132,7 +133,7 @@ double ANEOSdUdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSdPdRhoofRhoT(ANEOSMATERIAL *material, double rho, double T);
 double ANEOSdPdTofRhoT(ANEOSMATERIAL *material, double rho, double T);
 
-int ANEOSYieldParameters(ANEOSMATERIAL *material, double *Y0, double *YM, double *mui, double *xi);
+int ANEOSYieldParameters(ANEOSMATERIAL *material, double *Y0, double *YM, double *mui, double *mud, double *xi);
 double ANEOSGammaofRhoT(ANEOSMATERIAL *material, double rho, double T);
 
 void ANEOSPrintMat(ANEOSMATERIAL *material, FILE *fp);
