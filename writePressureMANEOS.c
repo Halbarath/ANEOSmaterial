@@ -113,7 +113,8 @@ int main(int argc, char *argv[])
 		}
 	}
 	
-	fp = fopen("pressure.txt", "w");
+	fp = fopen("pressure_maneos.txt", "w");
+	fprintf(fp, "# Material: %s\n", argv[1]);
 
 	for (int i = 0; i<nT; i++)
 	{
