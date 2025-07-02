@@ -1,6 +1,7 @@
 #!/bin/sh
 # Generate all EOS tables for ANEOSmaterial.
 
+MANEOS_INPUTFILE_PATH="../aneos-input-files"
 MANEOS_EXE="writeMANEOStable"
 DATE=$(date +%d.%m.%Y)
 
@@ -18,7 +19,7 @@ if [ ! -e "$MANEOS_EXE" ]; then
 fi
 
 # M-ANEOS iron alloy (Stewart 2020, http://doi.org/10.5281/zenodo.3866550)
-INPUT="../M-ANEOS/input_eoslib/maneos_Fe85Si15_sts2020.input"
+INPUT="$MANEOS_INPUTFILE_PATH/aneos-Fe85Si15-stewart-2020.input"
 RHO0="7.51"
 OUTPUT="MANEOStable_iron_Fe85Si15.in"
 MAT_STR="M-ANEOS iron alloy Fe85Si15 ($DATE, Stewart 2020: http://doi.org/10.5281/zenodo.3866550)"
@@ -30,7 +31,7 @@ else
 fi
 
 # M-ANEOS iron (Stewart 2020, http://doi.org/10.5281/zenodo.3866507)
-INPUT="../M-ANEOS/input_eoslib/maneos_iron_sts2020.input"
+INPUT="$MANEOS_INPUTFILE_PATH/aneos-iron-stewart-2020.input"
 RHO0="8.06"
 OUTPUT="MANEOStable_iron.in"
 MAT_STR="M-ANEOS iron ($DATE, Stewart 2020: http://doi.org/10.5281/zenodo.3866507)"
@@ -42,7 +43,7 @@ else
 fi
 
 # M-ANEOS forsterite (Stewart 2019, http://doi.org/10.5281/zenodo.3478631)
-INPUT="../M-ANEOS/input_eoslib/maneos_fosterite_sts2019.input"
+INPUT="$MANEOS_INPUTFILE_PATH/aneos-forsterite-stewart-2019.input"
 RHO0="3.22"
 OUTPUT="MANEOStable_fosterite.in"
 MAT_STR="M-ANEOS forsterite ($DATE, Stewart 2019: http://doi.org/10.5281/zenodo.3478631)"
@@ -53,8 +54,8 @@ else
     echo "ANEOS input file $INPUT not found."
 fi
 
-# M-ANEOS forsterite (Stewart 2019, http://doi.org/10.5281/zenodo.3478631)
-INPUT="../M-ANEOS/input_eoslib/maneos_dunite_gsc.input"
+# M-ANEOS dunite (Collins et al. 2014, LINK)
+INPUT="$MANEOS_INPUTFILE_PATH/aneos-dunite-collins-2014.input"
 RHO0="2.65"
 OUTPUT="MANEOStable_dunite.in"
 MAT_STR="M-ANEOS dunite ($DATE, Collins and Melosh 2014)"
