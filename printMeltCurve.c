@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
 	ANEOSMATERIAL *material;
 	material = ANEOSinitMaterial(iMat, dKpcUnit, dMsolUnit);
 
-    printf("# iMat= %i nRho= %i\n", material->iMat, material->nRho);
+    printf("# iMat= %i (%s) nRho= %i\n", material->iMat, material->matName, material->nRho);
     printf("#%14s%15s%15s\n", "rho", "T", "P");
 
     for (int i=0; i<material->nRho; i++) {
