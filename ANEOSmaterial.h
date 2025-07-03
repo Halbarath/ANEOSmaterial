@@ -26,15 +26,16 @@
 #define ANEOS_VERSION_MINOR   0
 #define ANEOS_VERSION_PATCH   1
 
-#define MAT_ANEOS_ICE         52
-#define MAT_ANEOS_DUNITE      54
-#define MAT_ANEOS_IRON        55
+#define MAT_ANEOS_ICE         		  52
+#define MAT_ANEOS_DUNITE      		  54
+#define MAT_ANEOS_IRON        		  55
 
-#define MAT_MANEOS_DUNITE     61
-#define MAT_MANEOS_FOSTERITE  62
-#define MAT_MANEOS_IRON       63
-#define MAT_MANEOS_FE85SI15   64
-#define MAT_MANEOS_SERPENTINE 65
+#define MAT_MANEOS_DUNITE     		  61
+#define MAT_MANEOS_FOSTERITE  		  62
+#define MAT_MANEOS_IRON       		  63
+#define MAT_MANEOS_FE85SI15   		  64
+#define MAT_MANEOS_SERPENTINE 		  65
+#define MAT_MANEOS_FORSTERITE_GADGET2 66
 
 #define ANEOS_N_MATERIAL_MAX 100
 

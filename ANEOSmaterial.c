@@ -62,6 +62,9 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 		case MAT_MANEOS_SERPENTINE:
             strcpy(inputfile, "MANEOStable_serpentine.in");
 			break;
+		case MAT_MANEOS_FORSTERITE_GADGET2:
+            strcpy(inputfile, "MANEOStable_forsterite_gadget2.in");
+			break;
 		default:
 			assert(0);
 	}
