@@ -104,6 +104,7 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
 
 	ANEOSMATERIAL *material;
 	material = (ANEOSMATERIAL *) calloc(1, sizeof(ANEOSMATERIAL));
+	assert(material != NULL);
 	material->iMat = iMat;
 	material->rho0 = rho0;
 	material->nRho = nRho;
@@ -138,18 +139,28 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
     material->CGStoCodeUnitsforC = 1.0 / material->CodeUnitstoCGSforC;
 
 	double *rhoAxis = (double *)malloc(sizeof(double)*nRho);
+	assert(rhoAxis != NULL);
 	double *TAxis = (double *)malloc(sizeof(double)*nT);
+	assert(TAxis != NULL);
 	double **uArray = (double **)malloc(sizeof(double*)*nT);
+	assert(uArray != NULL);
 	double **pArray = (double **)malloc(sizeof(double*)*nT);
+	assert(pArray != NULL);
 	double **cArray = (double **)malloc(sizeof(double*)*nT);
+	assert(cArray != NULL);
 	double **sArray = (double **)malloc(sizeof(double*)*nT);
+	assert(sArray != NULL);
 
     for (int i=0; i<nT; i++)
 	{
-		uArray[i] = (double *)malloc(nRho * sizeof(double)); 
-		pArray[i] = (double *)malloc(nRho * sizeof(double)); 
-		cArray[i] = (double *)malloc(nRho * sizeof(double)); 
-		sArray[i] = (double *)malloc(nRho * sizeof(double)); 
+		uArray[i] = (double *)malloc(nRho * sizeof(double));
+		assert(uArray[i] != NULL);
+		pArray[i] = (double *)malloc(nRho * sizeof(double));
+		assert(pArray[i] != NULL);
+		cArray[i] = (double *)malloc(nRho * sizeof(double));
+		assert(cArray[i] != NULL);
+		sArray[i] = (double *)malloc(nRho * sizeof(double));
+		assert(sArray[i] != NULL);
 	}
 	
 	material->rhoAxis = rhoAxis;
@@ -319,28 +330,27 @@ int ANEOSReadExtendedTable(ANEOSMATERIAL *material, char *inputfile)
         assert(0);
     }
 
-	double *rhoAxis = (double *)malloc(sizeof(double)*nRho);
-	double *TAxis = (double *)malloc(sizeof(double)*nT);
-
 	int **PhaseArray = (int **)malloc(sizeof(double*)*nT);
+	assert(PhaseArray != NULL);
 
     for (int i=0; i<nT; i++)
 	{
-		PhaseArray[i] = (int *)malloc(nRho * sizeof(int)); 
+		PhaseArray[i] = (int *)malloc(nRho * sizeof(int));
+		assert(PhaseArray[i] != NULL);
 	}
 
 	material->PhaseArray = PhaseArray;
 
-	if (fread(rhoAxis, sizeof(rhoAxis[0]), nRho, file)==0)
-	{
-	    fprintf(stderr, "ANEOSReadExtendedTable: Failed to read from file %s\n", inputfile);
-	    assert(0);
+	// Skip rhoAxis
+	if (fseeko(file, (off_t)(nRho * sizeof(double)), SEEK_CUR) != 0) {
+		fprintf(stderr, "ANEOSReadExtendedTable: Failed to skip rhoAxis in file %s\n", inputfile);
+		assert(0);
 	}
 	
-	if (fread(TAxis, sizeof(TAxis[0]), nT, file)==0)
-	{
-	    fprintf(stderr, "ANEOSReadExtendedTable: Failed to read from file %s\n", inputfile);
-	    assert(0);
+	// Skip TAxis
+	if (fseeko(file, (off_t)(nT * sizeof(double)), SEEK_CUR) != 0) {
+		fprintf(stderr, "ANEOSReadExtendedTable: Failed to skip TAxis in file %s\n", inputfile);
+		assert(0);
 	}
 	
 	for (int i=0; i< nT; i++)
@@ -389,6 +399,7 @@ int ANEOSReadMeltCurve(ANEOSMATERIAL *material, char *inputfile)
     }
 
 	double *T_melt = (double *)malloc(sizeof(double)*nRho);
+	assert(T_melt != NULL);
 
 	if (fread(T_melt, sizeof(T_melt[0]), nRho, file) == 0)
 	{
@@ -621,6 +632,7 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 {
 	// This is not really tested and may not work properly
 	double *Tdifference = (double *)malloc((material->nRho) * sizeof(double));
+	assert(Tdifference != NULL);
 	
 	for (int i=0; i<material->nRho; i++) 
 	{
