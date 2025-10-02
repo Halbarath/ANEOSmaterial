@@ -77,6 +77,9 @@ testmaneosdirect: testmaneosdirect.o aneosdirect.o $(objects) $(fortran_objects)
 calcPressureRhoT: calcPressureRhoT.o $(mylibobjects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+calcTemperatureRhoP: calcTemperatureRhoP.o $(mylibobjects)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 calcPressureRhoTMANEOS: calcPressureRhoTMANEOS.o $(objects) $(fortran_objects)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
