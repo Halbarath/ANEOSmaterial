@@ -160,6 +160,8 @@ int main(int argc, char *argv[])
     fprintf(stderr, "Arrays filled\n");
 
     fprintf(stderr, "Correcting Pressure array\n");
+    double slopeFactor = 99999999.0;
+    double tiltFactor = 1.00001;
     double *workP = (double *)malloc(nT * sizeof(double));
     for (int i = 0; i<nT; i++) {
         // assign line to work array
@@ -190,7 +192,7 @@ int main(int argc, char *argv[])
                 double x1 = log10(rhoAxis[index1]);
                 double x2 = log10(rhoAxis[index2+1]);
                 double y1 = log10(workP[index1]);
-                double y2 = log10((workP[index2] * 99.0 + workP[index2+1])/100.0);
+                double y2 = log10((workP[index2] * slopeFactor + workP[index2+1])/(slopeFactor + 1.0));
                 for (int m = index1; m<=index2; m++) {
                     workP[m] = pow(10.0,y1 + (log10(rhoAxis[m]) - x1) * (y2 - y1) / (x2 - x1));
                 }
@@ -209,13 +211,13 @@ int main(int argc, char *argv[])
         for (int j = 0; j<nRho; j++)
         {
             if (i > 0) {
-                if (pArray[i][j] < 1.0001 * pArray[i-1][j]) {
-                    pArray[i][j] = 1.0001 * pArray[i-1][j];
+                if (pArray[i][j] < tiltFactor * pArray[i-1][j]) {
+                    pArray[i][j] = tiltFactor * pArray[i-1][j];
                 }
             }
             if (j > 0) {
-                if (pArray[i][j] < 1.0001 * pArray[i][j-1]) {
-                    pArray[i][j] = 1.0001 * pArray[i][j-1];
+                if (pArray[i][j] < tiltFactor * pArray[i][j-1]) {
+                    pArray[i][j] = tiltFactor * pArray[i][j-1];
                 }
             }
         }
