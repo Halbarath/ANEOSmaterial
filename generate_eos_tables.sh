@@ -42,9 +42,9 @@ else
 fi
 
 # M-ANEOS forsterite (Stewart 2019, http://doi.org/10.5281/zenodo.3478631)
-INPUT="../M-ANEOS/input_eoslib/maneos_fosterite_sts2019.input"
+INPUT="../M-ANEOS/input_eoslib/maneos_forsterite_sts2019.input"
 RHO0="3.22"
-OUTPUT="MANEOStable_fosterite.in"
+OUTPUT="MANEOStable_forsterite.in"
 MAT_STR="M-ANEOS forsterite ($DATE, Stewart 2019: http://doi.org/10.5281/zenodo.3478631)"
 
 if [ -e "$INPUT" ]; then
@@ -54,10 +54,10 @@ else
 fi
 
 # M-ANEOS forsterite (Stewart 2019, http://doi.org/10.5281/zenodo.3478631)
-INPUT="../M-ANEOS/input_eoslib/maneos_dunite_gsc.input"
+INPUT="../M-ANEOS/input_eoslib/maneos_quartz_hjm.input"
 RHO0="2.65"
-OUTPUT="MANEOStable_dunite.in"
-MAT_STR="M-ANEOS dunite ($DATE, Collins and Melosh 2014)"
+OUTPUT="MANEOStable_quartz.in"
+MAT_STR="M-ANEOS dunite ($DATE, Melosh 2007)"
 
 "./$MANEOS_EXE" "$INPUT" "$RHO0" "$OUTPUT" "$MAT_STR" 1> /dev/null 2>&1
 
