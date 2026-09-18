@@ -17,10 +17,10 @@
 
 import numpy as np
 
-nRho = 1401
+nRho = 1801
 nT = 1601
 
-minRho = 1e-4
+minRho = 1e-6
 maxRho = 1000
 minT = 1
 maxT = 1e8
