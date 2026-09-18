@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
     fprintf(stderr, "Correcting Pressure array\n");
     double slopeFactor = 99999999.0;
     double tiltFactor = 1.00001;
-    double *workP = (double *)malloc(nT * sizeof(double));
+    double *workP = (double *)malloc(nRho * sizeof(double));
     for (int i = 0; i<nT; i++) {
         // assign line to work array
         for (int j = 0; j<nRho; j++) {
@@ -334,7 +334,7 @@ int main(int argc, char *argv[])
     fwrite(&nRho, sizeof(nRho), 1, file);
     fwrite(T_melt, sizeof(T_melt[0]), nRho, file);
 
-    fclose(fp);
+    fclose(file);
 
     fprintf(stderr, "Finished, exiting\n");
     return 0;
