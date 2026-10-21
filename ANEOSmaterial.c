@@ -382,87 +382,130 @@ int ANEOSReadMeltCurve(ANEOSMATERIAL *material, char *inputfile)
     return 0;
 }
 
+#define ANEOS_STRENGTH_LINE_MAX 256
+
 /*
- * Read the strength parameters.
+ * Read the strength parameters from a text file of the form
+ *
+ *   # comment
+ *   yieldStrengthModel = 2
+ *   Y0  = 1e8
+ *   YM  = 3.5e10
+ *   mui = 1.5
+ *   mud = 0.6
+ *   xi  = 1.2
+ *   Gamma = -1      # -1: compute shear modulus from the sound speed
+ *
+ * Whitespace around '=' is ignored; '#' starts a comment anywhere on a line.
+ * Returns 1 if the file does not exist (no strength available), 0 on success.
+ * Malformed files are fatal.
  */
 int ANEOSReadStrengthParameters(ANEOSMATERIAL *material, char *inputfile)
 {
 	FILE *file;
-    int bufferLength = 255;
-    char buffer[bufferLength];
-    char parameterString[bufferLength];
-    char valueString[bufferLength];
+	char buffer[ANEOS_STRENGTH_LINE_MAX];
+	char key[ANEOS_STRENGTH_LINE_MAX];
+	char value[ANEOS_STRENGTH_LINE_MAX];
+	int iLine = 0;
 
-    if (material == NULL) {
-        fprintf(stderr, "ANEOSReadStrengthParameters: ANEOSmaterial not initialized.\n");
-        assert(0);
-    }
+	if (material == NULL) {
+		fprintf(stderr, "ANEOSReadStrengthParameters: ANEOSmaterial not initialized.\n");
+		assert(0);
+	}
 
-	if ((file= fopen(inputfile, "r")) == NULL)
+	if ((file = fopen(inputfile, "r")) == NULL)
 	{
-		// fprintf(stderr, "ANEOSReadStrengthParameters: Could not open file %s\n", inputfile);
-        material->yieldStrengthModel = -1; // No Yield strength available
+		material->yieldStrengthModel = -1; /* No yield strength available */
 		return 1;
 	}
 
-    material->yieldStrengthModel = -1;
-    material->Y0 = -1.0;
-    material->YM = -1.0;
-    material->mui = -1.0;
-    material->mud = -1.0;
-    material->xi = -1.0;
-    material->Gamma = -2.0;
-    material->fixedGamma = 1;
+	material->yieldStrengthModel = -1;
+	material->Y0 = -1.0;
+	material->YM = -1.0;
+	material->mui = -1.0;
+	material->mud = -1.0;
+	material->xi = -1.0;
+	material->Gamma = -2.0;
+	material->fixedGamma = 1;
 
-    while(fgets(buffer, bufferLength, file)) {
-        if (buffer[0] == '#') continue;
-        if (buffer[0] == '\n') continue;
-        if (buffer[0] == '\r') continue;
-        char *rest = buffer;
-        char *token = strtok_r(rest, "=", &rest);
-        strcpy(parameterString,token);
-        token = strtok_r(rest, "=", &rest);
-        strcpy(valueString,token);
-        if (strcmp(parameterString,"yieldStrengthModel") == 0) {
-            sscanf(valueString, "%d", &material->yieldStrengthModel);
-        }
-        else if (strcmp(parameterString,"Y0") == 0) {
-            sscanf(valueString, "%lf", &material->Y0);
-        }
-        else if (strcmp(parameterString,"YM") == 0) {
-            sscanf(valueString, "%lf", &material->YM);
-        }
-        else if (strcmp(parameterString,"mui") == 0) {
-            sscanf(valueString, "%lf", &material->mui);
-        }
-        else if (strcmp(parameterString,"mud") == 0) {
-            sscanf(valueString, "%lf", &material->mud);
-        }
-        else if (strcmp(parameterString,"xi") == 0) {
-            sscanf(valueString, "%lf", &material->xi);
-        }
-        else if (strcmp(parameterString,"Gamma") == 0) {
-            sscanf(valueString, "%lf", &material->Gamma);
-            if (material->Gamma == -1.0) {
-                material->fixedGamma = 0;
-                material->Gamma = 0.0;
-            }
-        }
-        else {
-            fprintf(stderr,"ANEOSReadYieldParameters: Unknown parameter found: %s\n", parameterString);
-            fclose(file);
-            assert(0);
-        }
-    }
+	while (fgets(buffer, sizeof(buffer), file)) {
+		iLine++;
 
-    fclose(file);
+		/* Reject lines longer than the buffer rather than silently splitting them. */
+		if (strchr(buffer, '\n') == NULL && !feof(file)) {
+			fprintf(stderr, "ANEOSReadStrengthParameters: %s line %d exceeds %d characters.\n",
+			        inputfile, iLine, ANEOS_STRENGTH_LINE_MAX - 1);
+			fclose(file);
+			assert(0);
+			exit(1);
+		}
 
-    if ((material->yieldStrengthModel < 0) || (material->Y0 < 0.0) || (material->YM < 0.0) || (material->mui < 0.0) || (material->xi < 0.0) || (material->Gamma < 0.0)) {
-        fprintf(stderr, "ANEOSReadYieldParameters: Error while reading parameters\n");
-        assert(0);
-    }
+		/* Strip comments. */
+		char *hash = strchr(buffer, '#');
+		if (hash) *hash = '\0';
 
-    return 0;
+		/* Skip blank lines (only whitespace left). */
+		if (sscanf(buffer, " %255s", key) != 1) continue;
+
+		/* key = value, whitespace around '=' allowed. */
+		if (sscanf(buffer, " %255[^= \t\r\n] = %255s", key, value) != 2) {
+			fprintf(stderr, "ANEOSReadStrengthParameters: cannot parse %s line %d: '%s'\n",
+			        inputfile, iLine, buffer);
+			fclose(file);
+			assert(0);
+			exit(1);
+		}
+
+		char *end = NULL;
+		if (strcmp(key, "yieldStrengthModel") == 0) {
+			material->yieldStrengthModel = (int) strtol(value, &end, 10);
+		} else {
+			double v = strtod(value, &end);
+			if      (strcmp(key, "Y0")  == 0) material->Y0  = v;
+			else if (strcmp(key, "YM")  == 0) material->YM  = v;
+			else if (strcmp(key, "mui") == 0) material->mui = v;
+			else if (strcmp(key, "mud") == 0) material->mud = v;
+			else if (strcmp(key, "xi")  == 0) material->xi  = v;
+			else if (strcmp(key, "Gamma") == 0) {
+				if (v == -1.0) {
+					/* Sentinel: derive the shear modulus from the sound speed. */
+					material->fixedGamma = 0;
+					material->Gamma = 0.0;
+				} else {
+					material->fixedGamma = 1;
+					material->Gamma = v;
+				}
+			} else {
+				fprintf(stderr, "ANEOSReadStrengthParameters: unknown parameter '%s' in %s line %d\n",
+				        key, inputfile, iLine);
+				fclose(file);
+				assert(0);
+				exit(1);
+			}
+		}
+
+		if (end == value || *end != '\0') {
+			fprintf(stderr, "ANEOSReadStrengthParameters: invalid value '%s' for '%s' in %s line %d\n",
+			        value, key, inputfile, iLine);
+			fclose(file);
+			assert(0);
+			exit(1);
+		}
+	}
+
+	fclose(file);
+
+	if ((material->yieldStrengthModel < 0) || (material->Y0 < 0.0) || (material->YM < 0.0) ||
+	    (material->mui < 0.0) || (material->xi < 0.0) || (material->Gamma < 0.0)) {
+		fprintf(stderr, "ANEOSReadStrengthParameters: missing or invalid parameter in %s "
+		        "(yieldStrengthModel= %d Y0= %g YM= %g mui= %g xi= %g Gamma= %g)\n",
+		        inputfile, material->yieldStrengthModel, material->Y0, material->YM,
+		        material->mui, material->xi, material->Gamma);
+		assert(0);
+		exit(1);
+	}
+
+	return 0;
 }
 
 /*
