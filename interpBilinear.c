@@ -337,29 +337,31 @@ double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* 
     return z;
 }
 
+/*
+ * Find i such that xAxis[i] <= x < xAxis[i+1] for a strictly increasing axis.
+ *
+ * The result is clamped to [0, nX-2], i.e. x < xAxis[0] gives 0 and
+ * x >= xAxis[nX-1] gives nX-2, so the returned cell is always valid for
+ * interpolation (which then extrapolates linearly). Callers that must reject
+ * out-of-range input check the bounds themselves before calling.
+ *
+ * O(log nX), no assumption on nX.
+ */
 int findIndex(double x, double* xAxis, int nX)
 {
-    // This code assumes that nX - 1 is is a multiple of 50
-    int startIndex = 0;
-    int n = 50;
-    for (int testind = 1; testind < n + 1; testind++)
-    {
-        if (xAxis[(nX-1)/n*testind]>x)
-        {
-            startIndex = (nX-1)/n*(testind-1);
-            break;
-        }
+    int lo = 0;
+    int hi = nX - 1;
+
+    if (x < xAxis[0]) return 0;
+    if (x >= xAxis[nX - 1]) return nX - 2;
+
+    /* Invariant: xAxis[lo] <= x < xAxis[hi]. */
+    while (hi - lo > 1) {
+        int mid = lo + (hi - lo) / 2;
+        if (xAxis[mid] <= x) lo = mid;
+        else                 hi = mid;
     }
-    int i = 0;
-    for (int k=startIndex; k<nX; k++)
-    {
-        if (xAxis[k]>x)
-        {
-            i = k-1;
-            break;
-        }
-    }
-    return i;
+    return lo;
 }
 
 /*
@@ -399,4 +401,49 @@ double interpolateValueLinear(double x, int nX, double* xAxis, double* yAxis)
 
     y = f0*(1.0 - x) + f1*x;
     return y;
+}
+
+/*
+ * Partial derivatives of the bilinear interpolant at (rho, T):
+ *
+ *   z(x,y) = (1-x)(1-y) f00 + x(1-y) f10 + (1-x) y f01 + x y f11
+ *
+ * with x = (rho - rho_i)/(rho_{i+1} - rho_i), y = (T - T_j)/(T_{j+1} - T_j), so
+ *
+ *   dz/drho = [ (1-y)(f10 - f00) + y (f11 - f01) ] / (rho_{i+1} - rho_i)
+ *   dz/dT   = [ (1-x)(f01 - f00) + x (f11 - f10) ] / (T_{j+1} - T_j)
+ *
+ * These are exact for the interpolant and cost one cell lookup. The
+ * interpolant is only C0, so on a cell boundary the derivative is the one of
+ * the cell that findIndex selects (the cell to the right/above).
+ *
+ * Returns 0 on success, -1 if (rho, T) is outside the table (outputs untouched).
+ */
+int interpolateGradientBilinear(double rho, double T, int nT, int nRho, double* rhoAxis,
+        double* TAxis, double** zArray, double *dzdrho, double *dzdT)
+{
+    if (rho < rhoAxis[0] || rho >= rhoAxis[nRho-1] || T < TAxis[0] || T >= TAxis[nT-1])
+    {
+#ifdef EOSLIB_VERBOSE
+        fprintf(stderr,"ANEOS interpolateGradientBilinear failed, rho = %.15e, T = %.15e out of bounds\n", rho, T);
+#endif
+        return -1;
+    }
+
+    int i = findIndex(rho, rhoAxis, nRho);
+    int j = findIndex(T, TAxis, nT);
+
+    double drho = rhoAxis[i+1] - rhoAxis[i];
+    double dT   = TAxis[j+1] - TAxis[j];
+    double x = (rho - rhoAxis[i]) / drho;
+    double y = (T - TAxis[j]) / dT;
+
+    double f00 = zArray[j][i];
+    double f01 = zArray[j+1][i];
+    double f10 = zArray[j][i+1];
+    double f11 = zArray[j+1][i+1];
+
+    *dzdrho = ((1.0 - y) * (f10 - f00) + y * (f11 - f01)) / drho;
+    *dzdT   = ((1.0 - x) * (f01 - f00) + x * (f11 - f10)) / dT;
+    return 0;
 }

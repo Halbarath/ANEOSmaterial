@@ -498,7 +498,7 @@ int ANEOSReadStrengthParameters(ANEOSMATERIAL *material, char *inputfile)
 	if ((material->yieldStrengthModel < 0) || (material->Y0 < 0.0) || (material->YM < 0.0) ||
 	    (material->mui < 0.0) || (material->xi < 0.0) || (material->Gamma < 0.0)) {
 		fprintf(stderr, "ANEOSReadStrengthParameters: missing or invalid parameter in %s "
-		        "(yieldStrengthModel= %d Y0= %g YM= %g mui= %g xi= %g Gamma= %g)\n",
+		        "(yieldStrengthModel = %d Y0 = %g YM = %g mui = %g xi = %g Gamma = %g)\n",
 		        inputfile, material->yieldStrengthModel, material->Y0, material->YM,
 		        material->mui, material->xi, material->Gamma);
 		assert(0);
@@ -521,9 +521,9 @@ double ANEOSgetRho0(ANEOSMATERIAL *material)
  */
 double ANEOSTofPU(ANEOSMATERIAL *material, double p, double u)
 {
-	double rho = ANEOSRhoofPU(material,p,u);
-	double T = ANEOSTofRhoU(material,rho,u);
-	return T;
+	double rho = ANEOSRhoofPU(material, p, u);
+	if (rho < -1e40) return -1e50;
+	return ANEOSTofRhoU(material, rho, u);
 }
 
 /*
@@ -637,66 +637,76 @@ double ANEOSRhoofPT(ANEOSMATERIAL *material, double p, double T)
 }
 
 /*
- * Calculates density rho(p,u)
+ * g(rho) = T(rho, P) - T(rho, u) in table (cgs) coordinates.
+ * Returns -1e50 if either inversion fails at this rho.
+ */
+static double ANEOSRhoofPUResidual(ANEOSMATERIAL *material, double rho_cgs, double p_cgs, double u_cgs)
+{
+	double TP = backwardInterpolateTemperatureBilinear(rho_cgs, p_cgs, material->nT, material->nRho,
+	            material->rhoAxis, material->TAxis, material->pArray);
+	double Tu = backwardInterpolateTemperatureBilinear(rho_cgs, u_cgs, material->nT, material->nRho,
+	            material->rhoAxis, material->TAxis, material->uArray);
+	if (TP < -1e40 || Tu < -1e40) return -1e50;
+	return TP - Tu;
+}
+
+/*
+ * Calculates density rho(p,u): the density at which the isobar P and the
+ * isoenergy u intersect, i.e. T(rho, P) = T(rho, u).
+ *
+ * The residual is evaluated at every tabulated density; the first interval
+ * (scanning from low to high density) where it changes sign is then refined
+ * by bisection to a relative tolerance. If several intersections exist the
+ * lowest-density one is returned, matching the previous behaviour.
+ *
+ * Returns rho in code units, or -1e50 if no bracketed root exists.
  */
 double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 {
-	// This is not really tested and may not work properly
-	double *Tdifference = (double *)malloc((material->nRho) * sizeof(double));
-	assert(Tdifference != NULL);
-	
-	for (int i=0; i<material->nRho; i++) 
-	{
-		double T1 = backwardInterpolateTemperatureBilinear(material->rhoAxis[i],p*material->CodeUnitstoCGSforP,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->pArray);
-		double T2 = backwardInterpolateTemperatureBilinear(material->rhoAxis[i],u*material->CodeUnitstoCGSforU,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->uArray); 
-		if (T1>0 && T2>0)
-		{
-			Tdifference[i] = T1 - T2;
-		} else {
-			Tdifference[i] = -1e50;
-		}
-		
-	}
-	int k=0;
-	for (int i=0; i< material->nRho-1; i++)
-	{
-		if (Tdifference[i]>-1e40)
-		{
-			if (Tdifference[i]/Tdifference[i+1]<0)
-			{
-				k=i;
+	const double tol = 1e-10;
+	const int maxIter = 100;
+	double p_cgs = p * material->CodeUnitstoCGSforP;
+	double u_cgs = u * material->CodeUnitstoCGSforU;
+	int nRho = material->nRho;
+
+	/* Bracket: find consecutive nodes with valid residuals of opposite sign. */
+	double a = -1.0, b = -1.0, ga = 0.0, gb = 0.0;
+	double gprev = -1e50;
+	for (int i = 0; i < nRho - 1; i++) {        /* rhoAxis[nRho-1] is exclusive */
+		double g = ANEOSRhoofPUResidual(material, material->rhoAxis[i], p_cgs, u_cgs);
+		if (g > -1e40 && gprev > -1e40) {
+			if (g == 0.0) return material->rhoAxis[i] * material->CGStoCodeUnitsforRho;
+			if ((g < 0.0) != (gprev < 0.0)) {
+				a = material->rhoAxis[i-1]; ga = gprev;
+				b = material->rhoAxis[i];   gb = g;
 				break;
 			}
 		}
+		gprev = g;
 	}
-	
-	double a = material->rhoAxis[k] * material->CGStoCodeUnitsforRho;
-	double b = material->rhoAxis[k+1] * material->CGStoCodeUnitsforRho;
+	if (a < 0.0) {
+		material->nLookupFail++;
+		ANEOS_WARN("ANEOSRhoofPU: no bracket found for p = %.15e, u = %.15e\n", p, u);
+		return -1e50;
+	}
 
-	double c;
-	
-	double rho = -1e50;
-	int n = 0;
-	while (n<1000)
-	{
-		c = (a+b)/2;
-		if (ANEOSTofRhoP(material,c,p)-ANEOSTofRhoU(material,c,u) == 0 || (b-a)/2<1e-6)
-		{
-			rho = c;
-			break;
+	/* Bisection inside [a, b]. */
+	double c = 0.5 * (a + b);
+	for (int n = 0; n < maxIter && 2.0 * (b - a) / (a + b) > tol; n++) {
+		c = 0.5 * (a + b);
+		double gc = ANEOSRhoofPUResidual(material, c, p_cgs, u_cgs);
+		if (gc < -1e40) {
+			material->nLookupFail++;
+			ANEOS_WARN("ANEOSRhoofPU: residual undefined at rho = %.15e for p = %.15e, u = %.15e\n",
+			           c * material->CGStoCodeUnitsforRho, p, u);
+			return -1e50;
 		}
-		n++;
-		if (copysign(1,ANEOSTofRhoP(material,c,p)-ANEOSTofRhoU(material,c,u))== copysign(1,ANEOSTofRhoP(material,a,p)-ANEOSTofRhoU(material,a,u)))
-		{
-			a=c;
-		} else {
-			b=c;
-		}
+		if (gc == 0.0) break;
+		if ((gc < 0.0) == (ga < 0.0)) { a = c; ga = gc; }
+		else                          { b = c; gb = gc; }
 	}
-	
-	free(Tdifference);
-	if (rho<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSRhoofPU failed for p = %.15e, u = %.15e\n", p, u); }
-	return rho;
+
+	return c * material->CGStoCodeUnitsforRho;
 }
 
 /*
@@ -823,44 +833,78 @@ double ANEOSTmeltofRho(ANEOSMATERIAL *material, double rho)
 }
 
 /*
- * Calculates derivative dPdRho(rho,u)
+ * Partial derivatives of P(rho,T) and u(rho,T) at fixed T and fixed rho,
+ * in cgs. Shared by the public derivative functions below.
+ * Returns 0 on success, -1 if (rho, T) is outside the table.
  */
-double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
+static int ANEOSPartialsCGS(ANEOSMATERIAL *material, double rho, double T,
+                            double *dPdrho_T, double *dPdT_rho,
+                            double *dudrho_T, double *dudT_rho)
 {
-	// Finite difference for derivative
-    double h = 1e-6 * rho;
-    double dPdRho = 0;
+	double rho_cgs = rho * material->CodeUnitstoCGSforRho;
+	int iret = 0;
 
-    double ucoldl = ANEOSUofRhoT(material, rho - h, material->TAxis[0]);
-    double ucoldr = ANEOSUofRhoT(material, rho + h, material->TAxis[0]);
-
-    if (ucoldl <= u && ucoldr <= u)
-    {
-        dPdRho = (-ANEOSPofRhoU(material, rho - h, u) + ANEOSPofRhoU(material, rho + h, u))/(2*h);
-    } else if (ucoldl <= u)
-    {
-        dPdRho = (-ANEOSPofRhoU(material, rho - h, u) + ANEOSPofRhoU(material, rho, u))/h;
-    } else if (ucoldr <= u)
-    {
-        dPdRho = (-ANEOSPofRhoU(material, rho, u) + ANEOSPofRhoU(material, rho + h, u))/h;
-    } else
-    {
-        h = h*1e-4;
-        dPdRho = (-ANEOSPofRhoU(material, rho - h, u) + ANEOSPofRhoU(material, rho + h, u))/(2*h);
-    }
-
-	return dPdRho;
+	iret |= interpolateGradientBilinear(rho_cgs, T, material->nT, material->nRho,
+	        material->rhoAxis, material->TAxis, material->pArray, dPdrho_T, dPdT_rho);
+	if (dudrho_T && dudT_rho) {
+		iret |= interpolateGradientBilinear(rho_cgs, T, material->nT, material->nRho,
+		        material->rhoAxis, material->TAxis, material->uArray, dudrho_T, dudT_rho);
+	}
+	if (iret) {
+		material->nLookupFail++;
+		ANEOS_WARN("ANEOSPartialsCGS failed for rho = %.15e, T = %.15e\n", rho, T);
+		return -1;
+	}
+	return 0;
 }
 
 /*
- * Calculates derivative dPdU(rho,u)
+ * dP/drho at constant u (code units).
+ *
+ *   dP/drho|_u = dP/drho|_T - dP/dT|_rho * (du/drho|_T) / (du/dT|_rho)
+ */
+double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
+{
+	double dPdrho_T, dPdT_rho, dudrho_T, dudT_rho;
+	double T = ANEOSTofRhoU(material, rho, u);
+
+	if (ANEOSPartialsCGS(material, rho, T, &dPdrho_T, &dPdT_rho, &dudrho_T, &dudT_rho)) {
+		return -1e50;
+	}
+	if (!(dudT_rho > 0.0)) {
+		/* Heat capacity must be positive; a non-positive du/dT is a table artefact. */
+		material->nLookupFail++;
+		ANEOS_WARN("ANEOSdPdRhoofRhoU: du/dT|rho = %.15e <= 0 at rho = %.15e, T = %.15e\n", dudT_rho, rho, T);
+		return -1e50;
+	}
+
+	double dPdrho_u = dPdrho_T - dPdT_rho * dudrho_T / dudT_rho;
+
+	/* cgs: erg cm^-3 / (g cm^-3) -> code units. */
+	return dPdrho_u * material->CGStoCodeUnitsforP * material->CodeUnitstoCGSforRho;
+}
+
+/*
+ * dP/du at constant rho (code units).
+ *
+ *   dP/du|_rho = dP/dT|_rho / du/dT|_rho
  */
 double ANEOSdPdUofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
-	// Finite difference for derivative
-	double h = fabs(1e-5 * u);
-    double dPdU = (ANEOSPofRhoU(material, rho, u + h) - ANEOSPofRhoU(material, rho, u))/h;
-	return dPdU;
+	double dPdrho_T, dPdT_rho, dudrho_T, dudT_rho;
+	double T = ANEOSTofRhoU(material, rho, u);
+
+	if (ANEOSPartialsCGS(material, rho, T, &dPdrho_T, &dPdT_rho, &dudrho_T, &dudT_rho)) {
+		return -1e50;
+	}
+	if (!(dudT_rho > 0.0)) {
+		material->nLookupFail++;
+		ANEOS_WARN("ANEOSdPdUofRhoU: du/dT|rho = %.15e <= 0 at rho = %.15e, T = %.15e\n", dudT_rho, rho, T);
+		return -1e50;
+	}
+
+	/* cgs: erg cm^-3 / (erg g^-1) -> code units. */
+	return (dPdT_rho / dudT_rho) * material->CGStoCodeUnitsforP * material->CodeUnitstoCGSforU;
 }
 
 /*
@@ -873,28 +917,29 @@ double ANEOSdUdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
 }
 
 /*
- * Calculates derivative dPdRho(rho,T)
+ * dP/drho at constant T (code units).
  */
 double ANEOSdPdRhoofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
-	// Finite difference for derivative
-    double h = 1e-5 * rho;
-    double dPdRho = 0;
+	double dPdrho_T, dPdT_rho;
 
-    dPdRho = (ANEOSPofRhoT(material, rho + h, T) - ANEOSPofRhoT(material, rho - h, T))/(2*h);
-
-	return dPdRho;
+	if (ANEOSPartialsCGS(material, rho, T, &dPdrho_T, &dPdT_rho, NULL, NULL)) {
+		return -1e50;
+	}
+	return dPdrho_T * material->CGStoCodeUnitsforP * material->CodeUnitstoCGSforRho;
 }
 
 /*
- * Calculates derivative dPdU(rho,u)
+ * dP/dT at constant rho (code units; T is in K in both unit systems).
  */
 double ANEOSdPdTofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
-	// Finite difference for derivative
-	double h = 1e-5 * T;
-    double dPdT = (ANEOSPofRhoT(material, rho, T + h) - ANEOSPofRhoT(material, rho, T - h))/(2*h);
-	return dPdT;
+	double dPdrho_T, dPdT_rho;
+
+	if (ANEOSPartialsCGS(material, rho, T, &dPdrho_T, &dPdT_rho, NULL, NULL)) {
+		return -1e50;
+	}
+	return dPdT_rho * material->CGStoCodeUnitsforP;
 }
 
 /*
