@@ -164,84 +164,118 @@ double backwardInterpolateTemperatureBilinear_Scan(double rho, double z, int nT,
 }
 
 /*
- * Backward interpolate the density: find rho with z(rho, T) = z for a fixed T,
+ * Column value g_i = z(rhoAxis[i], T) for a fixed T cell j with local
+ * coordinate y. The interpolant is linear in rho between consecutive g_i.
+ */
+static inline double densityColumnValue(double* const* zArray, int i, int j, double y)
+{
+    return (1.0 - y) * zArray[i][j] + y * zArray[i][j+1];
+}
+
+/*
+ * Linear scan for the lowest-density cell [i, i+1] whose column values
+ * bracket z. Returns 0 and fills lo, glo, ghi on success, -1 if no cell does.
+ */
+static int scanCellRho(double* const* zArray, int nRho, int j, double y, double z,
+        int *plo, double *pglo, double *pghi)
+{
+    double ghi = densityColumnValue(zArray, 0, j, y);
+    for (int i = 0; i < nRho - 1; i++) {
+        double glo = ghi;
+        ghi = densityColumnValue(zArray, i+1, j, y);
+        if ((glo <= z && z <= ghi) || (ghi <= z && z <= glo)) {
+            *plo = i;
+            *pglo = glo;
+            *pghi = ghi;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+/*
+ * Backward interpolate the density: find rho with z(rho, T) = z at fixed T,
  * where z is one of the tabulated quantities (P or u).
  *
- * The search interval is [rhoAxis[0], 0.999*rhoAxis[nRho-1]] (the upper table
- * bound is exclusive in interpolateValueBilinear). z(rho, T) is assumed to be
- * monotonic in rho on that interval; the direction is detected from the end
- * points so both increasing and decreasing tables work.
+ * At fixed T the interpolant is piecewise linear in rho between the column
+ * values g_i = (1-y) z[i][j] + y z[i][j+1], so the inversion is exact: find
+ * the cell (i, i+1) whose g values bracket z, then solve the linear function
+ * for x.
  *
- * Returns -1e50 if T is outside the table, if z is not bracketed by the end
- * point values (i.e. no solution exists in the table at this T), or if the
- * bisection does not converge.
+ * Fast path: if the end-point values bracket z, a binary search over i finds
+ * the cell, which assumes g is monotonic in rho (true for P; u is not
+ * monotonic for solids since the cold curve has a minimum near rho0). If the
+ * end points do not bracket z, or the search lands in a cell that does not,
+ * a linear scan finds the lowest-density bracketing cell. When several roots
+ * exist the lowest-density one is returned; that is the library convention.
+ *
+ * Returns rho in [rhoAxis[0], rhoAxis[nRho-1]), or -1e50 if T is outside the
+ * table or z is not attained anywhere along the row.
  */
 double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray)
 {
-    const double tol = 1e-10;
-    const int maxIter = 200;
-
-    // check if T is out of bounds
-    if (T < TAxis[0])
+    if (T < TAxis[0] || T >= TAxis[nT-1])
     {
 #ifdef EOSLIB_VERBOSE
-        fprintf(stderr,"ANEOS backwardInterpolateDensityBilinear failed, T = %.15e is smaller than minT = %.15e\n", T, TAxis[0]);
-#endif
-        return -1e50;
-    }
-    if (T >= TAxis[nT-1])
-    {
-#ifdef EOSLIB_VERBOSE
-        fprintf(stderr,"ANEOS backwardInterpolateDensityBilinear failed, T = %.15e is larger than maxT = %.15e\n", T, TAxis[nT-1]);
+        fprintf(stderr,"ANEOS backwardInterpolateDensityBilinear failed, T = %.15e is outside [%.15e, %.15e)\n", T, TAxis[0], TAxis[nT-1]);
 #endif
         return -1e50;
     }
 
-    double a = rhoAxis[0];
-    double b = rhoAxis[nRho-1]*0.999;
-    double za = interpolateValueBilinear(a, T, nT, nRho, rhoAxis, TAxis, zArray);
-    double zb = interpolateValueBilinear(b, T, nT, nRho, rhoAxis, TAxis, zArray);
+    int j = findIndex(T, TAxis, nT);
+    double y = (T - TAxis[j]) / (TAxis[j+1] - TAxis[j]);
 
-    if (za < -1e40 || zb < -1e40) return -1e50;   /* cannot happen for valid T, kept for safety */
+    double g0 = densityColumnValue(zArray, 0, j, y);
+    double g1 = densityColumnValue(zArray, nRho-1, j, y);
 
     /* Exact hits at the end points. */
-    if (za == z) return a;
-    if (zb == z) return b;
+    if (g0 == z) return rhoAxis[0];
+    if (g1 == z) return nextafter(rhoAxis[nRho-1], 0.0);   /* stay below the exclusive upper bound */
 
-    /* z must be bracketed. */
-    if ((za < z) == (zb < z))
-    {
+    int lo, hi;
+    double glo, ghi;
+
+    if ((g0 < z) == (g1 < z)) {
+        /* End points do not bracket z: g may be non-monotonic. */
+        if (scanCellRho(zArray, nRho, j, y, z, &lo, &glo, &ghi) != 0) {
 #ifdef EOSLIB_VERBOSE
-        fprintf(stderr,"ANEOS backwardInterpolateDensityBilinear failed, z = %.15e is not bracketed at T = %.15e (z(rhoMin) = %.15e, z(rhoMax) = %.15e)\n", z, T, za, zb);
+            fprintf(stderr,"ANEOS backwardInterpolateDensityBilinear failed, z = %.15e is not attained at T = %.15e (z(rhoMin) = %.15e, z(rhoMax) = %.15e)\n", z, T, g0, g1);
 #endif
-        return -1e50;
+            return -1e50;
+        }
+        hi = lo + 1;
+    } else {
+        /* Binary search for the bracketing cell, assuming monotonic g. */
+        lo = 0; hi = nRho - 1; glo = g0; ghi = g1;
+        while (hi - lo > 1) {
+            int mid = lo + (hi - lo) / 2;
+            double gmid = densityColumnValue(zArray, mid, j, y);
+            if ((gmid < z) == (glo < z)) { lo = mid; glo = gmid; }
+            else                         { hi = mid; ghi = gmid; }
+        }
+        /* Non-monotonic g can still fool the search: verify, else fall back. */
+        if ((glo < z) == (ghi < z) && glo != z && ghi != z) {
+            if (scanCellRho(zArray, nRho, j, y, z, &lo, &glo, &ghi) != 0) return -1e50;
+            hi = lo + 1;
+        }
     }
 
-    /* Bisection; works for increasing or decreasing z(rho). */
-    double c = 0.5*(a + b);
-    int n;
-    for (n = 0; n < maxIter && 2.0*(b-a)/(a+b) > tol; n++) {
-        c = 0.5*(a + b);
-        double zc = interpolateValueBilinear(c, T, nT, nRho, rhoAxis, TAxis, zArray);
-        if (zc < -1e40) return -1e50;
-        if (zc == z) return c;
-        if ((zc < z) == (za < z)) { a = c; za = zc; }
-        else                      { b = c; zb = zc; }
-    }
-    if (n >= maxIter)
-    {
-#ifdef EOSLIB_VERBOSE
-        fprintf(stderr,"ANEOS backwardInterpolateDensityBilinear did not converge for z = %.15e, T = %.15e\n", z, T);
-#endif
-        return -1e50;
-    }
-    return c;
+    /* Solve the linear function in the cell. */
+    double x;
+    if (ghi == glo) x = 0.0;                 /* flat cell: any x works, take the lower node */
+    else            x = (z - glo) / (ghi - glo);
+    if (x < 0.0) x = 0.0;
+    if (x > 1.0) x = 1.0;
+
+    double rho = rhoAxis[lo] + x * (rhoAxis[hi] - rhoAxis[lo]);
+    if (rho >= rhoAxis[nRho-1]) rho = nextafter(rhoAxis[nRho-1], 0.0);
+    return rho;
 }
 
 /*
  * Interpolate a value using nearest neighbor interpolation
  */
-int interpolateValueNearest(double rho, double T, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray)
+int interpolateValueNearest(double rho, double T, int nT, int nRho, const double* rhoAxis, const double* TAxis, int* const* zArray)
 {
     // check if (rho,T) is out of bounds
     if (rho < rhoAxis[0])
