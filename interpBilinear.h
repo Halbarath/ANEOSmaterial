@@ -29,26 +29,53 @@
  * with the T index j contiguous in memory.
  */
 
-double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int nRho, double* rhoAxis,
-	double* TAxis, double** zArray);
-double backwardInterpolateTemperatureBilinear_Scan(double rho, double z, int nT, int nRho, double* rhoAxis,
-	double* TAxis, double** zArray);
-double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, double* rhoAxis,
-	double* TAxis, double** uArray);
-double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* rhoAxis,
-	double* TAxis, double** zArray);
-int interpolateValueNearest(double rho, double T, int nT, int nRho, double* rhoAxis,
-        double* TAxis, int** zArray);
-int findIndex(double x, double* xAxis, int nX);
-double interpolateValueLinear(double x, int nX, double* xAxis, double* yAxis);
-int interpolateGradientBilinear(double rho, double T, int nT, int nRho, double* rhoAxis,
-        double* TAxis, double** zArray, double *dzdrho, double *dzdT);
 /*
  * Evaluate the bilinear interpolant in cell (i, j) at local coordinates
  * (x, y) in [0,1]^2, where i is the rho index and j the T index.
  * No bounds checking: the caller owns the cell.
  */
-double interpolateCellBilinear(double** zArray, int i, int j, double x, double y);
+static inline double interpolateCellBilinear(double* const* zArray, int i, int j, double x, double y)
+{
+    double f00=zArray[i][j];
+    double f01=zArray[i][j+1];
+    double f10=zArray[i+1][j];
+    double f11=zArray[i+1][j+1];
+    return y*(f11*x - f01*(x - 1.0)) - (f10*x - f00*(x - 1.0))*(y - 1.0);
+}
+/*
+ * Find i such that xAxis[i] <= x < xAxis[i+1] for a strictly increasing axis.
+ *
+ * The result is clamped to [0, nX-2], i.e. x < xAxis[0] gives 0 and
+ * x >= xAxis[nX-1] gives nX-2, so the returned cell is always valid for
+ * interpolation (which then extrapolates linearly). Callers that must reject
+ * out-of-range input check the bounds themselves before calling.
+ *
+ * O(log nX), no assumption on nX.
+ */
+static inline int findIndex(double x, const double* xAxis, int nX)
+{
+    int lo = 0;
+    int hi = nX - 1;
+
+    if (x < xAxis[0]) return 0;
+    if (x >= xAxis[nX - 1]) return nX - 2;
+
+    /* Invariant: xAxis[lo] <= x < xAxis[hi]. */
+    while (hi - lo > 1) {
+        int mid = lo + (hi - lo) / 2;
+        if (xAxis[mid] <= x) lo = mid;
+        else                 hi = mid;
+    }
+    return lo;
+}
+
+double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray);
+double backwardInterpolateTemperatureBilinear_Scan(double rho, double z, int nT, int nRho,const double* rhoAxis, const double* TAxis, double* const* zArray);
+double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray);
+double interpolateValueBilinear(double rho, double T, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray);
+int interpolateValueNearest(double rho, double T, int nT, int nRho, const double* rhoAxis, const double* TAxis, int* const* zArray);
+double interpolateValueLinear(double x, int nX, const double* xAxis, const double* yAxis);
+int interpolateGradientBilinear(double rho, double T, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray, double *dzdrho, double *dzdT);
 
 /*
  * Backward solve for T at fixed rho, returning the cell and local coordinates
@@ -56,6 +83,5 @@ double interpolateCellBilinear(double** zArray, int i, int j, double x, double y
  * again. Returns 0 on success (i, j, x, y, T filled; y may lie slightly
  * outside [0,1] within the inversion tolerance), -1 on failure.
  */
-int backwardInterpolateTemperatureCell(double rho, double z, int nT, int nRho, double* rhoAxis,
-        double* TAxis, double** zArray, int *pi, int *pj, double *px, double *py, double *pT);
+int backwardInterpolateTemperatureCell(double rho, double z, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray, int *pi, int *pj, double *px, double *py, double *pT);
 #endif

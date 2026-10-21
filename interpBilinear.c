@@ -27,24 +27,10 @@
 #include "interpBilinear.h"
 
 /*
- * Bilinear interpolant in cell (i, j), rho-major table (zArray[i][j]).
- * Same expression as interpolateValueBilinear so that results are bit-identical.
- */
-double interpolateCellBilinear(double** zArray, int i, int j, double x, double y)
-{
-    double f00=zArray[i][j];
-    double f01=zArray[i][j+1];
-    double f10=zArray[i+1][j];
-    double f11=zArray[i+1][j+1];
-    return y*(f11*x - f01*(x - 1.0)) - (f10*x - f00*(x - 1.0))*(y - 1.0);
-}
-
-/*
  * Exhaustive scan over the T cells of column i for the lowest-T cell that
  * brackets z. Returns 0 and fills j, y, T on success, -1 if none does.
  */
-static int scanCellT(double rho, double z, int i, double x, int nT, double* rhoAxis,
-        double* TAxis, double** zArray, int *pj, double *py, double *pT)
+static int scanCellT(double rho, double z, int i, double x, int nT, const double* rhoAxis, const double* TAxis, double* const* zArray, int *pj, double *py, double *pT)
 {
     for (int j=0; j<(nT-1); j++)
     {
@@ -95,8 +81,7 @@ static int scanCellT(double rho, double z, int i, double x, int nT, double* rhoA
  *
  * Returns 0 on success, -1 if rho is outside the table or no cell brackets z.
  */
-int backwardInterpolateTemperatureCell(double rho, double z, int nT, int nRho, double* rhoAxis,
-        double* TAxis, double** zArray, int *pi, int *pj, double *px, double *py, double *pT)
+int backwardInterpolateTemperatureCell(double rho, double z, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray, int *pi, int *pj, double *px, double *py, double *pT)
 {
     if (rho < rhoAxis[0])
     {
@@ -154,8 +139,7 @@ int backwardInterpolateTemperatureCell(double rho, double z, int nT, int nRho, d
 /*
  * Backward interpolate the temperature (value only). See backwardInterpolateTemperatureCell.
  */
-double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int nRho, double* rhoAxis,
-        double* TAxis, double** zArray)
+double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray)
 {
     int i, j;
     double x, y, T;
@@ -168,8 +152,7 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
  * Exhaustive-scan backward interpolation (value only). Kept for callers that
  * want the slow path explicitly.
  */
-double backwardInterpolateTemperatureBilinear_Scan(double rho, double z, int nT, int nRho, double* rhoAxis,
-        double* TAxis, double** zArray)
+double backwardInterpolateTemperatureBilinear_Scan(double rho, double z, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray)
 {
     if (rho < rhoAxis[0] || rho >= rhoAxis[nRho-1]) return -1e50;
     int i=findIndex(rho, rhoAxis, nRho);
@@ -193,8 +176,7 @@ double backwardInterpolateTemperatureBilinear_Scan(double rho, double z, int nT,
  * point values (i.e. no solution exists in the table at this T), or if the
  * bisection does not converge.
  */
-double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, double* rhoAxis,
-        double* TAxis, double** zArray)
+double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray)
 {
     const double tol = 1e-10;
     const int maxIter = 200;
@@ -259,8 +241,7 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 /*
  * Interpolate a value using nearest neighbor interpolation
  */
-int interpolateValueNearest(double rho, double T, int nT, int nRho, double* rhoAxis,
-        double* TAxis, int** zArray)
+int interpolateValueNearest(double rho, double T, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray)
 {
     // check if (rho,T) is out of bounds
     if (rho < rhoAxis[0])
@@ -326,8 +307,7 @@ int interpolateValueNearest(double rho, double T, int nT, int nRho, double* rhoA
 /*
  * Interpolate a value using bilinear interpolation
  */
-double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* rhoAxis,
-        double* TAxis, double** zArray)
+double interpolateValueBilinear(double rho, double T, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray)
 {
     // check if (rho,T) is out of bounds
     if (rho < rhoAxis[0])
@@ -381,36 +361,9 @@ double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* 
 }
 
 /*
- * Find i such that xAxis[i] <= x < xAxis[i+1] for a strictly increasing axis.
- *
- * The result is clamped to [0, nX-2], i.e. x < xAxis[0] gives 0 and
- * x >= xAxis[nX-1] gives nX-2, so the returned cell is always valid for
- * interpolation (which then extrapolates linearly). Callers that must reject
- * out-of-range input check the bounds themselves before calling.
- *
- * O(log nX), no assumption on nX.
- */
-int findIndex(double x, double* xAxis, int nX)
-{
-    int lo = 0;
-    int hi = nX - 1;
-
-    if (x < xAxis[0]) return 0;
-    if (x >= xAxis[nX - 1]) return nX - 2;
-
-    /* Invariant: xAxis[lo] <= x < xAxis[hi]. */
-    while (hi - lo > 1) {
-        int mid = lo + (hi - lo) / 2;
-        if (xAxis[mid] <= x) lo = mid;
-        else                 hi = mid;
-    }
-    return lo;
-}
-
-/*
  * Interpolate a value using linear interpolation
  */
-double interpolateValueLinear(double x, int nX, double* xAxis, double* yAxis)
+double interpolateValueLinear(double x, int nX, const double* xAxis, const double* yAxis)
 {
     // check if x is out of bounds
     if (x < xAxis[0])
@@ -462,8 +415,7 @@ double interpolateValueLinear(double x, int nX, double* xAxis, double* yAxis)
  *
  * Returns 0 on success, -1 if (rho, T) is outside the table (outputs untouched).
  */
-int interpolateGradientBilinear(double rho, double T, int nT, int nRho, double* rhoAxis,
-        double* TAxis, double** zArray, double *dzdrho, double *dzdT)
+int interpolateGradientBilinear(double rho, double T, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray, double *dzdrho, double *dzdT)
 {
     if (rho < rhoAxis[0] || rho >= rhoAxis[nRho-1] || T < TAxis[0] || T >= TAxis[nT-1])
     {
