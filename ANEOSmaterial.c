@@ -678,7 +678,7 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 			if (g == 0.0) return material->rhoAxis[i] * material->CGStoCodeUnitsforRho;
 			if ((g < 0.0) != (gprev < 0.0)) {
 				a = material->rhoAxis[i-1]; ga = gprev;
-				b = material->rhoAxis[i];   gb = g;
+				b = material->rhoAxis[i];
 				break;
 			}
 		}
@@ -703,7 +703,7 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 		}
 		if (gc == 0.0) break;
 		if ((gc < 0.0) == (ga < 0.0)) { a = c; ga = gc; }
-		else                          { b = c; gb = gc; }
+		else                          { b = c }
 	}
 
 	return c * material->CGStoCodeUnitsforRho;

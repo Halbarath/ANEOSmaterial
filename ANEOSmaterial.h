@@ -20,7 +20,11 @@
  * Header of ANEOSmaterial.c
  *
  */
- 
+
+#ifndef ANEOSMATERIAL_HINCLUDED
+#define ANEOSMATERIAL_HINCLUDED
+#include <stdio.h>
+
 #define ANEOS_VERSION_TEXT    "1.0.2"
 #define ANEOS_VERSION_MAJOR   1
 #define ANEOS_VERSION_MINOR   0
@@ -158,3 +162,4 @@ int ANEOSYieldParameters(ANEOSMATERIAL *material, double *Y0, double *YM, double
 double ANEOSGammaofRhoT(ANEOSMATERIAL *material, double rho, double T);
 
 void ANEOSPrintMat(ANEOSMATERIAL *material, FILE *fp);
+#endif
