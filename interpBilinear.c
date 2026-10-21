@@ -27,7 +27,15 @@
 #include "interpBilinear.h"
 
 /*
- * Backward interpolate the temperature using bilinear interpolation
+ * Backward interpolate the temperature: find T with z(rho, T) = z at fixed rho.
+ *
+ * Fast path: binary search over the T cells, which assumes z increases
+ * monotonically with T at fixed rho (true for u and s everywhere, and for p
+ * outside two-phase regions). If the search lands in a cell that does not
+ * bracket z, or the cell is degenerate (z constant in T, so the inversion is
+ * undefined), it falls back to the exhaustive linear scan in
+ * backwardInterpolateTemperatureBilinear_Scan, which returns the lowest-T cell
+ * that brackets z, or -1e50 if none does.
  */
 double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int nRho, double* rhoAxis,
         double* TAxis, double** zArray)
@@ -80,7 +88,7 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
         }
     }
     if (T < -1e40) {
-        T = backwardInterpolateTemperatureBilinearOld(rho, z, nT, nRho, rhoAxis, TAxis, zArray);
+        T = backwardInterpolateTemperatureBilinear_Scan(rho, z, nT, nRho, rhoAxis, TAxis, zArray);
     }
     return T;
 }
@@ -88,7 +96,7 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
 /*
  * Backward interpolate the temperature using bilinear interpolation
  */
-double backwardInterpolateTemperatureBilinearOld(double rho, double z, int nT, int nRho, double* rhoAxis,
+double backwardInterpolateTemperatureBilinear_Scan(double rho, double z, int nT, int nRho, double* rhoAxis,
         double* TAxis, double** zArray)
 {
     // check if (rho,T) is out of bounds
@@ -171,11 +179,24 @@ double backwardInterpolateTemperatureBilinearOld(double rho, double z, int nT, i
 }
 
 /*
- * Backward interpolate the density using bilinear interpolation
+ * Backward interpolate the density: find rho with z(rho, T) = z for a fixed T,
+ * where z is one of the tabulated quantities (P or u).
+ *
+ * The search interval is [rhoAxis[0], 0.999*rhoAxis[nRho-1]] (the upper table
+ * bound is exclusive in interpolateValueBilinear). z(rho, T) is assumed to be
+ * monotonic in rho on that interval; the direction is detected from the end
+ * points so both increasing and decreasing tables work.
+ *
+ * Returns -1e50 if T is outside the table, if z is not bracketed by the end
+ * point values (i.e. no solution exists in the table at this T), or if the
+ * bisection does not converge.
  */
 double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, double* rhoAxis,
         double* TAxis, double** zArray)
 {
+    const double tol = 1e-10;
+    const int maxIter = 200;
+
     // check if T is out of bounds
     if (T < TAxis[0])
     {
@@ -194,17 +215,41 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 
     double a = rhoAxis[0];
     double b = rhoAxis[nRho-1]*0.999;
-    double c = -1e50;
-    double zc = 0;
+    double za = interpolateValueBilinear(a, T, nT, nRho, rhoAxis, TAxis, zArray);
+    double zb = interpolateValueBilinear(b, T, nT, nRho, rhoAxis, TAxis, zArray);
 
-    while (2*(b-a)/(b+a) > 1e-10) {
+    if (za < -1e40 || zb < -1e40) return -1e50;   /* cannot happen for valid T, kept for safety */
+
+    /* Exact hits at the end points. */
+    if (za == z) return a;
+    if (zb == z) return b;
+
+    /* z must be bracketed. */
+    if ((za < z) == (zb < z))
+    {
+#ifdef EOSLIB_VERBOSE
+        fprintf(stderr,"ANEOS backwardInterpolateDensityBilinear failed, z = %.15e is not bracketed at T = %.15e (z(rhoMin) = %.15e, z(rhoMax) = %.15e)\n", z, T, za, zb);
+#endif
+        return -1e50;
+    }
+
+    /* Bisection; works for increasing or decreasing z(rho). */
+    double c = 0.5*(a + b);
+    int n;
+    for (n = 0; n < maxIter && 2.0*(b-a)/(a+b) > tol; n++) {
         c = 0.5*(a + b);
-        zc = interpolateValueBilinear(c, T, nT, nRho, rhoAxis, TAxis, zArray);
-        if (zc > z) {
-            b = c;
-        } else {
-            a = c;
-        }
+        double zc = interpolateValueBilinear(c, T, nT, nRho, rhoAxis, TAxis, zArray);
+        if (zc < -1e40) return -1e50;
+        if (zc == z) return c;
+        if ((zc < z) == (za < z)) { a = c; za = zc; }
+        else                      { b = c; zb = zc; }
+    }
+    if (n >= maxIter)
+    {
+#ifdef EOSLIB_VERBOSE
+        fprintf(stderr,"ANEOS backwardInterpolateDensityBilinear did not converge for z = %.15e, T = %.15e\n", z, T);
+#endif
+        return -1e50;
     }
     return c;
 }

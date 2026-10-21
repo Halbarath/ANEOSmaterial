@@ -129,21 +129,21 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
 	material->CodeUnitstoCGSforRho = 1.0;
 	material->CodeUnitstoCGSforC = 1.0;
 	
-	if (dKpcUnit > 0.0 && dMsolUnit > 0.0)
-	{
-    const double MSOLG = 1.99e33;        /* solar mass in grams */
-    const double GCGS = 6.67e-8;         /* G in cgs */
-    const double KPCCM = 3.085678e21;    /* kiloparsec in centimeters */
-	
-	// unit of u is erg/g = cm^2/s^2
-	material->CodeUnitstoCGSforU = GCGS*dMsolUnit*MSOLG/(dKpcUnit*KPCCM);
-	// unit of rho is g/cm^3
-	material->CodeUnitstoCGSforRho = (dMsolUnit*MSOLG)/pow(dKpcUnit*KPCCM,3.0);
-	// unit of p is erg/cm^3=1/(cm*s^2)
-	// combine the upper two
-	material->CodeUnitstoCGSforP = material->CodeUnitstoCGSforU*material->CodeUnitstoCGSforRho;
-	// unit of c is cm/s
-	material->CodeUnitstoCGSforC = dKpcUnit*KPCCM*sqrt((material->CodeUnitstoCGSforRho*GCGS));
+	if (dKpcUnit > 0.0 && dMsolUnit > 0.0) {
+        /* Gasoline/pkdgrav3 unit constants. Must match the hydro code and the other EOS libraries exactly. */
+        const double MSOLG = 1.99e33;        /* solar mass in grams */
+        const double GCGS = 6.67e-8;         /* G in cgs */
+        const double KPCCM = 3.085678e21;    /* kiloparsec in centimeters */
+
+        // unit of u is erg/g = cm^2/s^2
+        material->CodeUnitstoCGSforU = GCGS*dMsolUnit*MSOLG/(dKpcUnit*KPCCM);
+        // unit of rho is g/cm^3
+        material->CodeUnitstoCGSforRho = (dMsolUnit*MSOLG)/pow(dKpcUnit*KPCCM,3.0);
+        // unit of p is erg/cm^3=1/(cm*s^2)
+        // combine the upper two
+        material->CodeUnitstoCGSforP = material->CodeUnitstoCGSforU*material->CodeUnitstoCGSforRho;
+        // unit of c is cm/s
+        material->CodeUnitstoCGSforC = dKpcUnit*KPCCM*sqrt((material->CodeUnitstoCGSforRho*GCGS));
 	}
 
     material->CGStoCodeUnitsforU = 1.0 / material->CodeUnitstoCGSforU;
