@@ -136,6 +136,14 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u);
 double ANEOSCofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T);
 
+/*
+ * Fused lookup for the hydro code: P(rho,u), c(rho,u) and T(rho,u) from one
+ * cell search. Returns P and fills *c and *T, all in code units. On failure
+ * behaves like the separate calls: T falls back to TAxis[0]; P and c are the
+ * table values at that T, or -1e50 (scaled) if rho is outside the table.
+ */
+double ANEOSPCTofRhoU(ANEOSMATERIAL *material, double rho, double u, double *c, double *T);
+
 // These functions are for extended EOS tables. Both return -1 if no extended
 // table is loaded or (rho, T) is outside it.
 int ANEOSPhaseofRhoU(ANEOSMATERIAL *material, double rho, double u);

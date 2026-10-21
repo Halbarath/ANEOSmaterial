@@ -670,7 +670,7 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 	int nRho = material->nRho;
 
 	/* Bracket: find consecutive nodes with valid residuals of opposite sign. */
-	double a = -1.0, b = -1.0, ga = 0.0, gb = 0.0;
+	double a = -1.0, b = -1.0, ga = 0.0;
 	double gprev = -1e50;
 	for (int i = 0; i < nRho - 1; i++) {        /* rhoAxis[nRho-1] is exclusive */
 		double g = ANEOSRhoofPUResidual(material, material->rhoAxis[i], p_cgs, u_cgs);
@@ -728,6 +728,44 @@ double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T)
 	if (c<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSCofRhoT failed for rho = %.15e, T = %.15e\n", rho, T); }
 	c *= material->CGStoCodeUnitsforC;
 	return c;
+}
+
+double ANEOSPCTofRhoU(ANEOSMATERIAL *material, double rho, double u, double *c, double *T)
+{
+	double rho_cgs = rho * material->CodeUnitstoCGSforRho;
+	double u_cgs   = u   * material->CodeUnitstoCGSforU;
+	int i, j;
+	double x, y, Tcell;
+
+	/* rho outside the table: nothing can be evaluated. Same results as the
+	 * separate calls (TofRhoU fallback, PofRhoT/CofRhoT sentinel). */
+	if (rho_cgs < material->rhoAxis[0] || rho_cgs >= material->rhoAxis[material->nRho-1]) {
+		material->nLookupFail++;
+		ANEOS_WARN("ANEOSPCTofRhoU: rho = %.15e outside table for u = %.15e\n", rho, u);
+		*T = material->TAxis[0];
+		*c = -1e50 * material->CGStoCodeUnitsforC;
+		return -1e50 * material->CGStoCodeUnitsforP;
+	}
+
+	if (backwardInterpolateTemperatureCell(rho_cgs, u_cgs, material->nT, material->nRho,
+	        material->rhoAxis, material->TAxis, material->uArray, &i, &j, &x, &y, &Tcell) != 0) {
+		/* Fallback (unchanged behaviour): lowest tabulated temperature, i.e. cell j = 0, y = 0. */
+		material->nLookupFail++;
+		ANEOS_WARN("ANEOSPCTofRhoU: T(rho,u) failed for rho = %.15e, u = %.15e, falling back to T = %.15e\n",
+		           rho, u, material->TAxis[0]);
+		i = findIndex(rho_cgs, material->rhoAxis, material->nRho);
+		x = (rho_cgs - material->rhoAxis[i]) / (material->rhoAxis[i+1] - material->rhoAxis[i]);
+		j = 0;
+		y = 0.0;
+		Tcell = material->TAxis[0];
+	}
+
+	/* The inversion tolerates y in [-1e-4, 1+1e-4]; evaluate P and c inside the cell. */
+	double ye = (y < 0.0) ? 0.0 : ((y > 1.0) ? 1.0 : y);
+
+	*T = Tcell;
+	*c = interpolateCellBilinear(material->cArray, i, j, x, ye) * material->CGStoCodeUnitsforC;
+	return interpolateCellBilinear(material->pArray, i, j, x, ye) * material->CGStoCodeUnitsforP;
 }
 
 /*

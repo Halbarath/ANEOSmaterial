@@ -27,38 +27,95 @@
 #include "interpBilinear.h"
 
 /*
- * Backward interpolate the temperature: find T with z(rho, T) = z at fixed rho.
+ * Bilinear interpolant in cell (i, j). Same expression as interpolateValueBilinear
+ * so that results are bit-identical.
+ */
+double interpolateCellBilinear(double** zArray, int i, int j, double x, double y)
+{
+    double f00=zArray[j][i];
+    double f01=zArray[j+1][i];
+    double f10=zArray[j][i+1];
+    double f11=zArray[j+1][i+1];
+    return y*(f11*x - f01*(x - 1.0)) - (f10*x - f00*(x - 1.0))*(y - 1.0);
+}
+
+/*
+ * Exhaustive scan over the T cells of column i for the lowest-T cell that
+ * brackets z. Returns 0 and fills j, y, T on success, -1 if none does.
+ */
+static int scanCellT(double rho, double z, int i, double x, int nT, double* rhoAxis,
+        double* TAxis, double** zArray, int *pj, double *py, double *pT)
+{
+    for (int j=0; j<(nT-1); j++)
+    {
+        double f00=zArray[j][i];
+        double f01=zArray[j+1][i];
+        double f10=zArray[j][i+1];
+        double f11=zArray[j+1][i+1];
+
+        double y = -(z - f10*x + f00*(x - 1.0))/(f10*x - f11*x - f00*(x - 1.0) + f01*(x - 1.0));
+
+        if (y>= -0.0001 && y<=1.0001)
+        {
+            *pj = j;
+            *py = y;
+            *pT = (TAxis[j+1]-TAxis[j])*y+TAxis[j];
+            return 0;
+        }
+    }
+#ifdef EOSLIB_VERBOSE
+    {
+        // nothing found, find out why
+        // this may not always give the correct answer
+        // here we assume that z is somewhat proportional to T for a given rho
+        // and that the extrema lie on the grid boundaries
+        double zbottom = interpolateCellBilinear(zArray, i, 0, x, 0.0);
+        double ztop    = interpolateCellBilinear(zArray, i, nT-2, x, 1.0);
+        if (z < zbottom)
+            fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, z = %.15e is smaller than minz = %.15e\n", z, zbottom);
+        if (z > ztop)
+            fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, z = %.15e is bigger than maxz = %.15e\n", z, ztop);
+    }
+#endif
+    return -1;
+}
+
+/*
+ * Backward interpolate the temperature: find T with z(rho, T) = z at fixed rho,
+ * and report the cell (i, j) and local coordinates (x, y) of the solution.
  *
  * Fast path: binary search over the T cells, which assumes z increases
  * monotonically with T at fixed rho (true for u and s everywhere, and for p
  * outside two-phase regions). If the search lands in a cell that does not
  * bracket z, or the cell is degenerate (z constant in T, so the inversion is
- * undefined), it falls back to the exhaustive linear scan in
- * backwardInterpolateTemperatureBilinear_Scan, which returns the lowest-T cell
- * that brackets z, or -1e50 if none does.
+ * undefined), it falls back to the exhaustive scan, which returns the
+ * lowest-T cell that brackets z.
+ *
+ * Returns 0 on success, -1 if rho is outside the table or no cell brackets z.
  */
-double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int nRho, double* rhoAxis,
-        double* TAxis, double** zArray)
+int backwardInterpolateTemperatureCell(double rho, double z, int nT, int nRho, double* rhoAxis,
+        double* TAxis, double** zArray, int *pi, int *pj, double *px, double *py, double *pT)
 {
-    // check if (rho,T) is out of bounds
     if (rho < rhoAxis[0])
     {
 #ifdef EOSLIB_VERBOSE
         fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, rho = %.15e is smaller than minRho = %.15e\n", rho, rhoAxis[0]);
 #endif
-        return -1e50;
+        return -1;
     }
     if (rho >= rhoAxis[nRho-1])
     {
 #ifdef EOSLIB_VERBOSE
         fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, rho = %.15e is larger than maxRho = %.15e\n", rho, rhoAxis[nRho-1]);
 #endif
-        return -1e50;
+        return -1;
     }
 
     int i=findIndex(rho, rhoAxis, nRho);
     double x=(rho-rhoAxis[i])/(rhoAxis[i+1]-rhoAxis[i]);
-    double T = -1e50;
+    *pi = i;
+    *px = x;
+
     int a = 0;
     int b = nT - 2;
     int c = (a + b) / 2;
@@ -81,100 +138,43 @@ double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int 
             c = (a + b) / 2;
         } else if ((zlow < zhigh && (z <= zhigh && z >= zlow)) || (zhigh <= zlow && (z >= zhigh && z <= zlow))) {
             double y = -(z - f10*x + f00*(x - 1.0))/(f10*x - f11*x - f00*(x - 1.0) + f01*(x - 1.0));
-            T = (TAxis[c+1]-TAxis[c])*y+TAxis[c];
-            break;
+            *pj = c;
+            *py = y;
+            *pT = (TAxis[c+1]-TAxis[c])*y+TAxis[c];
+            return 0;
         } else {
             break;
         }
     }
-    if (T < -1e40) {
-        T = backwardInterpolateTemperatureBilinear_Scan(rho, z, nT, nRho, rhoAxis, TAxis, zArray);
-    }
+    return scanCellT(rho, z, i, x, nT, rhoAxis, TAxis, zArray, pj, py, pT);
+}
+
+/*
+ * Backward interpolate the temperature (value only). See backwardInterpolateTemperatureCell.
+ */
+double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int nRho, double* rhoAxis,
+        double* TAxis, double** zArray)
+{
+    int i, j;
+    double x, y, T;
+    if (backwardInterpolateTemperatureCell(rho, z, nT, nRho, rhoAxis, TAxis, zArray, &i, &j, &x, &y, &T) != 0)
+        return -1e50;
     return T;
 }
 
 /*
- * Backward interpolate the temperature using bilinear interpolation
+ * Exhaustive-scan backward interpolation (value only). Kept for callers that
+ * want the slow path explicitly.
  */
 double backwardInterpolateTemperatureBilinear_Scan(double rho, double z, int nT, int nRho, double* rhoAxis,
         double* TAxis, double** zArray)
 {
-    // check if (rho,T) is out of bounds
-    if (rho < rhoAxis[0])
-    {
-#ifdef EOSLIB_VERBOSE
-        fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, rho = %.15e is smaller than minRho = %.15e\n", rho, rhoAxis[0]);
-#endif
-        return -1e50;
-    }
-    if (rho >= rhoAxis[nRho-1])
-    {
-#ifdef EOSLIB_VERBOSE
-        fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, rho = %.15e is larger than maxRho = %.15e\n", rho, rhoAxis[nRho-1]);
-#endif
-        return -1e50;
-    }
-
-    // searching the rho interval containing the rho value
+    if (rho < rhoAxis[0] || rho >= rhoAxis[nRho-1]) return -1e50;
     int i=findIndex(rho, rhoAxis, nRho);
-
-    // calculating the inverted bilinear interpolation for each of the selected rectangles
-    // until the value is found
-    double T = -1e50;
-
-    for (int j=0; j<(nT-1); j++)
-    {
-        double x=(rho-rhoAxis[i])/(rhoAxis[i+1]-rhoAxis[i]);
-
-        double f00=zArray[j][i];
-        double f01=zArray[j+1][i];
-        double f10=zArray[j][i+1];
-        double f11=zArray[j+1][i+1];
-
-        double y = -(z - f10*x + f00*(x - 1.0))/(f10*x - f11*x - f00*(x - 1.0) + f01*(x - 1.0));
-
-        if (y>= -0.0001 && y<=1.0001)
-        {
-            T = (TAxis[j+1]-TAxis[j])*y+TAxis[j];
-            break;
-        }
-
-    }
-#ifdef EOSLIB_VERBOSE
-    if (T < -1e40)
-    {
-        // nothing found, find out why
-        // this may not always give the correct answer
-        // here we assume that z is somewhat proportional to T for a given rho
-        // and that the extrema lie on the grid boundaries
-        int j = 0;
-        double x=(rho-rhoAxis[i])/(rhoAxis[i+1]-rhoAxis[i]);
-        double y = 0.0;
-        double f00=zArray[j][i];
-        double f01=zArray[j+1][i];
-        double f10=zArray[j][i+1];
-        double f11=zArray[j+1][i+1];
-        double zbottom = y*(f11*x - f01*(x - 1.0)) - (f10*x - f00*(x - 1.0))*(y - 1.0);
-
-        if (z < zbottom)
-        {
-            // below the grid
-            fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, z = %.15e is smaller than minz = %.15e\n", z, zbottom);
-        }
-        j = nT-2;
-        y = 1.0;
-        f00=zArray[j][i];
-        f01=zArray[j+1][i];
-        f10=zArray[j][i+1];
-        f11=zArray[j+1][i+1];
-        double ztop = y*(f11*x - f01*(x - 1.0)) - (f10*x - f00*(x - 1.0))*(y - 1.0);
-        if (z > ztop)
-        {
-            // above the grid
-            fprintf(stderr,"ANEOS backwardInterpolateTemperatureBilinear failed, z = %.15e is bigger than maxz = %.15e\n", z, ztop);
-        }
-    }
-#endif
+    double x=(rho-rhoAxis[i])/(rhoAxis[i+1]-rhoAxis[i]);
+    int j;
+    double y, T;
+    if (scanCellT(rho, z, i, x, nT, rhoAxis, TAxis, zArray, &j, &y, &T) != 0) return -1e50;
     return T;
 }
 
