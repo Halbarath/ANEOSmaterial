@@ -91,6 +91,37 @@ static void ANEOSReadOrDie(void *ptr, size_t size, size_t n, FILE *file, const c
 	}
 }
 
+/*
+ * Allocate a rho-major table: one contiguous block of nRho*nT values plus
+ * nRho column pointers into it. Returns the column pointers; the block is
+ * returned through *pData so it can be freed.
+ */
+static double **ANEOSAllocTable(int nRho, int nT, double **pData)
+{
+	double *data = (double *)malloc((size_t)nRho * nT * sizeof(double));
+	assert(data != NULL);
+	double **cols = (double **)malloc((size_t)nRho * sizeof(double *));
+	assert(cols != NULL);
+	for (int i = 0; i < nRho; i++) cols[i] = data + (size_t)i * nT;
+	*pData = data;
+	return cols;
+}
+
+/*
+ * Read one table from the file, which stores it T-major (nT rows of nRho
+ * values), and transpose it into the rho-major layout. tmp must hold
+ * nRho*nT doubles.
+ */
+static void ANEOSReadTableTransposed(double **cols, int nRho, int nT, double *tmp,
+                                     FILE *file, const char *what, const char *inputfile)
+{
+	ANEOSReadOrDie(tmp, sizeof(double), (size_t)nRho * nT, file, what, inputfile);
+	for (int j = 0; j < nT; j++) {
+		const double *row = tmp + (size_t)j * nRho;
+		for (int i = 0; i < nRho; i++) cols[i][j] = row[i];
+	}
+}
+
 ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcUnit, double dMsolUnit)
 {
 	double rho0;
@@ -151,49 +182,29 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
     material->CGStoCodeUnitsforRho = 1.0 / material->CodeUnitstoCGSforRho;
     material->CGStoCodeUnitsforC = 1.0 / material->CodeUnitstoCGSforC;
 
-	double *rhoAxis = (double *)malloc(sizeof(double)*nRho);
+    double *rhoAxis = (double *)malloc(sizeof(double)*nRho);
 	assert(rhoAxis != NULL);
 	double *TAxis = (double *)malloc(sizeof(double)*nT);
 	assert(TAxis != NULL);
-	double **uArray = (double **)malloc(sizeof(double*)*nT);
-	assert(uArray != NULL);
-	double **pArray = (double **)malloc(sizeof(double*)*nT);
-	assert(pArray != NULL);
-	double **cArray = (double **)malloc(sizeof(double*)*nT);
-	assert(cArray != NULL);
-	double **sArray = (double **)malloc(sizeof(double*)*nT);
-	assert(sArray != NULL);
 
-    for (int i=0; i<nT; i++)
-	{
-		uArray[i] = (double *)malloc(nRho * sizeof(double));
-		assert(uArray[i] != NULL);
-		pArray[i] = (double *)malloc(nRho * sizeof(double));
-		assert(pArray[i] != NULL);
-		cArray[i] = (double *)malloc(nRho * sizeof(double));
-		assert(cArray[i] != NULL);
-		sArray[i] = (double *)malloc(nRho * sizeof(double));
-		assert(sArray[i] != NULL);
-	}
-	
 	material->rhoAxis = rhoAxis;
 	material->TAxis = TAxis;
-	material->uArray = uArray;
-	material->pArray = pArray;
-	material->cArray = cArray;
-	material->sArray = sArray;
+	material->uArray = ANEOSAllocTable(nRho, nT, &material->uData);
+	material->pArray = ANEOSAllocTable(nRho, nT, &material->pData);
+	material->cArray = ANEOSAllocTable(nRho, nT, &material->cData);
+	material->sArray = ANEOSAllocTable(nRho, nT, &material->sData);
 
 	ANEOSReadOrDie(rhoAxis, sizeof(rhoAxis[0]), nRho, file, "rhoAxis", inputfile);
 	ANEOSReadOrDie(TAxis,   sizeof(TAxis[0]),   nT,   file, "TAxis",   inputfile);
 
-	for (int i=0; i< nT; i++)
-		ANEOSReadOrDie(pArray[i], sizeof(pArray[i][0]), nRho, file, "pArray", inputfile);
-	for (int i=0; i< nT; i++)
-		ANEOSReadOrDie(uArray[i], sizeof(uArray[i][0]), nRho, file, "uArray", inputfile);
-	for (int i=0; i< nT; i++)
-		ANEOSReadOrDie(sArray[i], sizeof(sArray[i][0]), nRho, file, "sArray", inputfile);
-	for (int i=0; i< nT; i++)
-		ANEOSReadOrDie(cArray[i], sizeof(cArray[i][0]), nRho, file, "cArray", inputfile);
+	/* Tables are stored T-major in the file; read each with one fread and transpose. */
+	double *tmp = (double *)malloc((size_t)nRho * nT * sizeof(double));
+	assert(tmp != NULL);
+	ANEOSReadTableTransposed(material->pArray, nRho, nT, tmp, file, "pArray", inputfile);
+	ANEOSReadTableTransposed(material->uArray, nRho, nT, tmp, file, "uArray", inputfile);
+	ANEOSReadTableTransposed(material->sArray, nRho, nT, tmp, file, "sArray", inputfile);
+	ANEOSReadTableTransposed(material->cArray, nRho, nT, tmp, file, "cArray", inputfile);
+	free(tmp);
 
 	/* The material string is optional: older tables end here. */
 	size_t nStr = fread(material->matstring, 1, sizeof(material->matstring) - 1, file);
@@ -235,34 +246,21 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
  */
 void ANEOSfinalizeMaterial(ANEOSMATERIAL *material)
 {
-	for (int i=0; i<material->nT; i++)
-	{
-		free(material->uArray[i]);
-		free(material->pArray[i]); 
-		free(material->cArray[i]); 
-		free(material->sArray[i]); 
+	free(material->uData); free(material->uArray);
+	free(material->pData); free(material->pArray);
+	free(material->cData); free(material->cArray);
+	free(material->sData); free(material->sArray);
+
+	if (material->PhaseArray != NULL) {
+		free(material->phaseData);
+		free(material->PhaseArray);
 	}
-
-    /* Extended tables. */
-    if (material->PhaseArray != NULL) {
-        for (int i=0; i<material->nT; i++)
-        {
-            if (material->PhaseArray[i] != NULL)
-                free(material->PhaseArray[i]);
-        }
-	free(material->PhaseArray);
-    }
-
 	if (material->T_melt != NULL) {
 		free(material->T_melt);
 	}
 
 	free(material->rhoAxis);
 	free(material->TAxis);
-	free(material->uArray);
-	free(material->pArray);
-	free(material->cArray);
-	free(material->sArray);
 	free(material);
 }
 
@@ -325,19 +323,22 @@ int ANEOSReadExtendedTable(ANEOSMATERIAL *material, char *inputfile)
 	}
 	free(axisBuf);
 
-	int **PhaseArray = (int **)malloc(sizeof(int*) * nT);
+    int *phaseData = (int *)malloc((size_t)nRho * nT * sizeof(int));
+	assert(phaseData != NULL);
+	int **PhaseArray = (int **)malloc((size_t)nRho * sizeof(int *));
 	assert(PhaseArray != NULL);
+	for (int i = 0; i < nRho; i++) PhaseArray[i] = phaseData + (size_t)i * nT;
 
-    for (int i=0; i<nT; i++)
-	{
-		PhaseArray[i] = (int *)malloc(nRho * sizeof(int));
-		assert(PhaseArray[i] != NULL);
-	}
-
-	for (int i=0; i< nT; i++)
-		ANEOSReadOrDie(PhaseArray[i], sizeof(PhaseArray[i][0]), nRho, file, "PhaseArray", inputfile);
+	int *tmp = (int *)malloc((size_t)nRho * nT * sizeof(int));
+	assert(tmp != NULL);
+	ANEOSReadOrDie(tmp, sizeof(int), (size_t)nRho * nT, file, "PhaseArray", inputfile);
+	for (int j = 0; j < nT; j++)
+		for (int i = 0; i < nRho; i++)
+			PhaseArray[i][j] = tmp[(size_t)j * nRho + i];
+	free(tmp);
 
 	/* Only publish the array once it is complete. */
+	material->phaseData = phaseData;
 	material->PhaseArray = PhaseArray;
 	fclose(file);
 

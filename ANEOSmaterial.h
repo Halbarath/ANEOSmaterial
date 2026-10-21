@@ -74,15 +74,24 @@ typedef struct ANEOSmaterial
     double CGStoCodeUnitsforRho;
     double CGStoCodeUnitsforC;
 	
-	// interpolation arrays, array of array of pointers
+	/*
+	 * Interpolation tables. Each is one contiguous block, rho-major:
+	 *   xData[i*nT + j] = x(rhoAxis[i], TAxis[j])
+	 * and xArray[i] points at column i, so xArray[i][j] indexes the same
+	 * element. The inner index j (temperature) is contiguous, which is what
+	 * the backward T search and the bilinear cell evaluation walk.
+	 * The on-disk format is unchanged (T-major); the transpose happens at load.
+	 */
 	double *rhoAxis;
 	double *TAxis;
+	double *uData, *pData, *cData, *sData;
 	double **uArray;
 	double **pArray;
 	double **cArray;
 	double **sArray;
-    
-    // Optional array
+
+	// Optional phase table, same layout
+	int *phaseData;
 	int **PhaseArray;
 
     // Melt curve (optional)

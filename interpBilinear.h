@@ -24,6 +24,11 @@
 #ifndef INTERPBILINEAR_HINCLUDED
 #define INTERPBILINEAR_HINCLUDED
 
+/*
+ * All 2D tables are rho-major: zArray[i][j] = z(rhoAxis[i], TAxis[j]),
+ * with the T index j contiguous in memory.
+ */
+
 double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int nRho, double* rhoAxis,
 	double* TAxis, double** zArray);
 double backwardInterpolateTemperatureBilinear_Scan(double rho, double z, int nT, int nRho, double* rhoAxis,
@@ -40,7 +45,8 @@ int interpolateGradientBilinear(double rho, double T, int nT, int nRho, double* 
         double* TAxis, double** zArray, double *dzdrho, double *dzdT);
 /*
  * Evaluate the bilinear interpolant in cell (i, j) at local coordinates
- * (x, y) in [0,1]^2. No bounds checking: the caller owns the cell.
+ * (x, y) in [0,1]^2, where i is the rho index and j the T index.
+ * No bounds checking: the caller owns the cell.
  */
 double interpolateCellBilinear(double** zArray, int i, int j, double x, double y);
 

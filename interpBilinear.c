@@ -27,15 +27,15 @@
 #include "interpBilinear.h"
 
 /*
- * Bilinear interpolant in cell (i, j). Same expression as interpolateValueBilinear
- * so that results are bit-identical.
+ * Bilinear interpolant in cell (i, j), rho-major table (zArray[i][j]).
+ * Same expression as interpolateValueBilinear so that results are bit-identical.
  */
 double interpolateCellBilinear(double** zArray, int i, int j, double x, double y)
 {
-    double f00=zArray[j][i];
-    double f01=zArray[j+1][i];
-    double f10=zArray[j][i+1];
-    double f11=zArray[j+1][i+1];
+    double f00=zArray[i][j];
+    double f01=zArray[i][j+1];
+    double f10=zArray[i+1][j];
+    double f11=zArray[i+1][j+1];
     return y*(f11*x - f01*(x - 1.0)) - (f10*x - f00*(x - 1.0))*(y - 1.0);
 }
 
@@ -48,10 +48,10 @@ static int scanCellT(double rho, double z, int i, double x, int nT, double* rhoA
 {
     for (int j=0; j<(nT-1); j++)
     {
-        double f00=zArray[j][i];
-        double f01=zArray[j+1][i];
-        double f10=zArray[j][i+1];
-        double f11=zArray[j+1][i+1];
+        double f00=zArray[i][j];
+        double f01=zArray[i][j+1];
+        double f10=zArray[i+1][j];
+        double f11=zArray[i+1][j+1];
 
         double y = -(z - f10*x + f00*(x - 1.0))/(f10*x - f11*x - f00*(x - 1.0) + f01*(x - 1.0));
 
@@ -90,6 +90,8 @@ static int scanCellT(double rho, double z, int i, double x, int nT, double* rhoA
  * bracket z, or the cell is degenerate (z constant in T, so the inversion is
  * undefined), it falls back to the exhaustive scan, which returns the
  * lowest-T cell that brackets z.
+ * The search probes zArray[i][c] for varying c, which is contiguous in the
+ * rho-major layout.
  *
  * Returns 0 on success, -1 if rho is outside the table or no cell brackets z.
  */
@@ -122,10 +124,10 @@ int backwardInterpolateTemperatureCell(double rho, double z, int nT, int nRho, d
     int dontexit = 1;
     while (dontexit) {
         if ((b - a) < 2) dontexit = 0;
-        double f00=zArray[c][i];
-        double f01=zArray[c+1][i];
-        double f10=zArray[c][i+1];
-        double f11=zArray[c+1][i+1];
+        double f00=zArray[i][c];
+        double f01=zArray[i][c+1];
+        double f10=zArray[i+1][c];
+        double f11=zArray[i+1][c+1];
         double ylow = -0.0001;
         double yhigh = 1.0001;
         double zlow = ylow*(f11*x - f01*(x - 1.0)) - (f10*x - f00*(x - 1.0))*(ylow - 1.0);
@@ -290,9 +292,7 @@ int interpolateValueNearest(double rho, double T, int nT, int nRho, double* rhoA
         return -1;
     }
 
-    // searching for grid rectangle containing the point
-    // could be calculated if grid is guarantied to be logarithmic
-    // as we do not assume that, we search for the grid rectangle
+    // locate the cell (i, j) containing the point; tables are rho-major, zArray[i][j]
     int i=findIndex(rho, rhoAxis, nRho);
 
     int j=findIndex(T, TAxis, nT);
@@ -302,10 +302,10 @@ int interpolateValueNearest(double rho, double T, int nT, int nRho, double* rhoA
     double y=(T-TAxis[j])/(TAxis[j+1]-TAxis[j]);
 
     // calculating bilinear interpolation
-    int f00=zArray[j][i];
-    int f01=zArray[j+1][i];
-    int f10=zArray[j][i+1];
-    int f11=zArray[j+1][i+1];
+    int f00=zArray[i][j];
+    int f01=zArray[i][j+1];
+    int f10=zArray[i+1][j];
+    int f11=zArray[i+1][j+1];
     
     if ((x <= 0.5) && (y <= 0.5)) {
         return f00;
@@ -359,9 +359,7 @@ double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* 
         return -1e50;
     }
 
-    // searching for grid rectangle containing the point
-    // could be calculated if grid is guarantied to be logarithmic
-    // as we do not assume that, we search for the grid rectangle
+    // locate the cell (i, j) containing the point; tables are rho-major, zArray[i][j]
     int i=findIndex(rho, rhoAxis, nRho);
 
     int j=findIndex(T, TAxis, nT);
@@ -371,10 +369,10 @@ double interpolateValueBilinear(double rho, double T, int nT, int nRho, double* 
     double y=(T-TAxis[j])/(TAxis[j+1]-TAxis[j]);
 
     // calculating bilinear interpolation
-    double f00=zArray[j][i];
-    double f01=zArray[j+1][i];
-    double f10=zArray[j][i+1];
-    double f11=zArray[j+1][i+1];
+    double f00=zArray[i][j];
+    double f01=zArray[i][j+1];
+    double f10=zArray[i+1][j];
+    double f11=zArray[i+1][j+1];
 
     double z = -1e50;
 
@@ -483,10 +481,10 @@ int interpolateGradientBilinear(double rho, double T, int nT, int nRho, double* 
     double x = (rho - rhoAxis[i]) / drho;
     double y = (T - TAxis[j]) / dT;
 
-    double f00 = zArray[j][i];
-    double f01 = zArray[j+1][i];
-    double f10 = zArray[j][i+1];
-    double f11 = zArray[j+1][i+1];
+    double f00 = zArray[i][j];
+    double f01 = zArray[i][j+1];
+    double f10 = zArray[i+1][j];
+    double f11 = zArray[i+1][j+1];
 
     *dzdrho = ((1.0 - y) * (f10 - f00) + y * (f11 - f01)) / drho;
     *dzdT   = ((1.0 - x) * (f01 - f00) + x * (f11 - f10)) / dT;
