@@ -76,6 +76,21 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
 	return material;
 }
 
+/*
+ * Read exactly n items or abort. A short read of a binary table is always a
+ * corrupt or truncated file.
+ */
+static void ANEOSReadOrDie(void *ptr, size_t size, size_t n, FILE *file, const char *what, const char *inputfile)
+{
+	size_t nRead = fread(ptr, size, n, file);
+	if (nRead != n) {
+		fprintf(stderr, "ANEOSmaterial: failed to read %s from file %s (got %zu of %zu items)\n",
+		        what, inputfile, nRead, n);
+		assert(0);
+		exit(1);   /* in case NDEBUG is set */
+	}
+}
+
 ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcUnit, double dMsolUnit)
 {
 	double rho0;
@@ -88,21 +103,16 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
 	{
 		fprintf(stderr, "Could not open file %s\n", inputfile);
 		assert(0);
+		exit(1);
 	}
-	if (fread(&rho0, sizeof(rho0), 1, file)==0)
-	{
-		fprintf(stderr, "Failed to read from file %s\n", inputfile);
+	ANEOSReadOrDie(&rho0, sizeof(rho0), 1, file, "rho0", inputfile);
+	ANEOSReadOrDie(&nRho, sizeof(nRho), 1, file, "nRho", inputfile);
+	ANEOSReadOrDie(&nT,   sizeof(nT),   1, file, "nT",   inputfile);
+
+	if (nRho < 2 || nT < 2) {
+		fprintf(stderr, "ANEOSinitMaterialFromFile: invalid table size nRho = %d, nT = %d in %s\n", nRho, nT, inputfile);
 		assert(0);
-	}
-	if (fread(&nRho, sizeof(nRho), 1, file)==0)
-	{
-		fprintf(stderr, "Failed to read from file %s\n", inputfile);
-		assert(0);
-	}
-	if (fread(&nT, sizeof(nT), 1, file)==0)
-	{
-		fprintf(stderr, "Failed to read from file %s\n", inputfile);
-		assert(0);
+		exit(1);
 	}
 
 	ANEOSMATERIAL *material;
@@ -112,7 +122,7 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
 	material->rho0 = rho0;
 	material->nRho = nRho;
 	material->nT = nT;
-	strcpy(material->matName,inputfile);
+	snprintf(material->matName, sizeof(material->matName), "%s", inputfile);
 	
 	material->CodeUnitstoCGSforU = 1.0;
 	material->CodeUnitstoCGSforP = 1.0;
@@ -173,90 +183,49 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
 	material->cArray = cArray;
 	material->sArray = sArray;
 
-	if (fread(rhoAxis, sizeof(rhoAxis[0]), nRho, file)==0)
-	{
-	fprintf(stderr, "Failed to read from file %s\n", inputfile);
-	assert(0);
-	}
-	
-	if (fread(TAxis, sizeof(TAxis[0]), nT, file)==0)
-	{
-	fprintf(stderr, "Failed to read from file %s\n", inputfile);
-	assert(0);
-	}
-	
+	ANEOSReadOrDie(rhoAxis, sizeof(rhoAxis[0]), nRho, file, "rhoAxis", inputfile);
+	ANEOSReadOrDie(TAxis,   sizeof(TAxis[0]),   nT,   file, "TAxis",   inputfile);
+
 	for (int i=0; i< nT; i++)
-	{
-		if (fread(pArray[i], sizeof(pArray[i][0]), nRho, file)==0)
-		{
-		fprintf(stderr, "Failed to read from file %s\n", inputfile);
-		assert(0);
-		}
-	}
-	
+		ANEOSReadOrDie(pArray[i], sizeof(pArray[i][0]), nRho, file, "pArray", inputfile);
 	for (int i=0; i< nT; i++)
-	{
-		if (fread(uArray[i], sizeof(uArray[i][0]), nRho, file)==0)
-		{
-		fprintf(stderr, "Failed to read from file %s\n", inputfile);
-		assert(0);
-		}
-	}
-	
+		ANEOSReadOrDie(uArray[i], sizeof(uArray[i][0]), nRho, file, "uArray", inputfile);
 	for (int i=0; i< nT; i++)
-	{
-		if (fread(sArray[i], sizeof(sArray[i][0]), nRho, file)==0)
-		{
-		fprintf(stderr, "Failed to read from file %s\n", inputfile);
-		assert(0);
-		}
-	}
-	
+		ANEOSReadOrDie(sArray[i], sizeof(sArray[i][0]), nRho, file, "sArray", inputfile);
 	for (int i=0; i< nT; i++)
-	{
-		if (fread(cArray[i], sizeof(cArray[i][0]), nRho, file)==0)
-		{
-		fprintf(stderr, "Failed to read from file %s\n", inputfile);
-		assert(0);
-		}
-	}
-    
-    if (fread(material->matstring, sizeof(material->matstring), 1, file)==0)
-	{
-        fprintf(stderr, "No material string given in %s\n", inputfile);
-        strcpy(material->matstring, "No material string given");
+		ANEOSReadOrDie(cArray[i], sizeof(cArray[i][0]), nRho, file, "cArray", inputfile);
+
+	/* The material string is optional: older tables end here. */
+	size_t nStr = fread(material->matstring, 1, sizeof(material->matstring) - 1, file);
+	if (nStr == 0) {
+		snprintf(material->matstring, sizeof(material->matstring), "No material string given");
+	} else {
+		material->matstring[nStr] = '\0';
 	}
 	
 	fclose(file);
 
-    /* Read extended EOS tables if they exists. */
-    char exinputfile[256];
-    strcpy(exinputfile, inputfile);
-    strcat(exinputfile, "_ex");
+	/* Optional companion files: <inputfile>_ex, _tmelt, _strength. */
+	char exinputfile[sizeof(material->matName) + 16];
 
-    if (ANEOSReadExtendedTable(material, exinputfile)) {
-        //fprintf(stderr, "No extended EOS tables found.\n");
-    }
+	snprintf(exinputfile, sizeof(exinputfile), "%s_ex", inputfile);
+	if (ANEOSReadExtendedTable(material, exinputfile)) {
+		//fprintf(stderr, "No extended EOS tables found.\n");
+	}
 
-	/* Read melt curve (optional) */
-    strcpy(exinputfile, inputfile);
-    strcat(exinputfile, "_tmelt");
-
+	snprintf(exinputfile, sizeof(exinputfile), "%s_tmelt", inputfile);
 	if (ANEOSReadMeltCurve(material, exinputfile)) {
 		//fprintf(stderr, "No melting curve table found.\n");
 	}
 
-    /* Read strength parameters (optional) */
-    strcpy(exinputfile, inputfile);
-    strcat(exinputfile, "_strength");
+	snprintf(exinputfile, sizeof(exinputfile), "%s_strength", inputfile);
+	if (ANEOSReadStrengthParameters(material, exinputfile)) {
+		//fprintf(stderr, "No strength parameters found.\n");
+	}
 
-    if (ANEOSReadStrengthParameters(material, exinputfile)) {
-        //fprintf(stderr, "No strength parameters found.\n");
-    }
-
-    if (material->yieldStrengthModel >= 0 && material->T_melt == NULL) {
-        material->yieldStrengthModel = -1;
-    }
+	if (material->yieldStrengthModel >= 0 && material->T_melt == NULL) {
+		material->yieldStrengthModel = -1;
+	}
 
 	return material;
 }
@@ -298,7 +267,8 @@ void ANEOSfinalizeMaterial(ANEOSMATERIAL *material)
 }
 
 /*
- * Read an extended EOS table. */
+ * Read an extended EOS table.
+ */
 int ANEOSReadExtendedTable(ANEOSMATERIAL *material, char *inputfile)
 {
 	FILE *file;
@@ -312,28 +282,50 @@ int ANEOSReadExtendedTable(ANEOSMATERIAL *material, char *inputfile)
 
 	if ((file= fopen(inputfile, "rb")) == NULL)
 	{
-		//fprintf(stderr, "ANEOSReadExtendedTable: Could not open file %s\n", inputfile);
-		return 1;
+		return 1;   /* optional file, absence is not an error */
 	}
 
     /* If the file exists we assume it should be readable. */
-	if (fread(&nRho, sizeof(nRho), 1, file)==0)
-	{
-		fprintf(stderr, "ANEOSReadExtendedTable: Failed to read from file %s\n", inputfile);
-		assert(0);
-	}
-	if (fread(&nT, sizeof(nT), 1, file)==0)
-	{
-		fprintf(stderr, "ANEOSReadExtendedTable: Failed to read from file %s\n", inputfile);
-		assert(0);
-	}
+	ANEOSReadOrDie(&nRho, sizeof(nRho), 1, file, "nRho", inputfile);
+	ANEOSReadOrDie(&nT,   sizeof(nT),   1, file, "nT",   inputfile);
 
     if ((material->nRho != nRho) || (material->nT != nT)) {
-		fprintf(stderr, "ANEOSReadExtendedTable: Inconsistent number of grid points.\n");
+		fprintf(stderr, "ANEOSReadExtendedTable: Inconsistent number of grid points in %s "
+		        "(table: nRho = %d, nT = %d; main: nRho = %d, nT = %d).\n",
+		        inputfile, nRho, nT, material->nRho, material->nT);
         assert(0);
+        exit(1);
     }
 
-	int **PhaseArray = (int **)malloc(sizeof(double*)*nT);
+	/*
+	 * Read the axes and verify that they match the main table instead of
+	 * skipping them. An extended table built from a different grid would
+	 * otherwise be silently misaligned.
+	 */
+	double *axisBuf = (double *)malloc(sizeof(double) * (nRho > nT ? nRho : nT));
+	assert(axisBuf != NULL);
+
+	ANEOSReadOrDie(axisBuf, sizeof(double), nRho, file, "rhoAxis", inputfile);
+	for (int i = 0; i < nRho; i++) {
+		if (axisBuf[i] != material->rhoAxis[i]) {
+			fprintf(stderr, "ANEOSReadExtendedTable: rhoAxis[%d] = %.15e in %s does not match main table (%.15e).\n",
+			        i, axisBuf[i], inputfile, material->rhoAxis[i]);
+			assert(0);
+			exit(1);
+		}
+	}
+	ANEOSReadOrDie(axisBuf, sizeof(double), nT, file, "TAxis", inputfile);
+	for (int j = 0; j < nT; j++) {
+		if (axisBuf[j] != material->TAxis[j]) {
+			fprintf(stderr, "ANEOSReadExtendedTable: TAxis[%d] = %.15e in %s does not match main table (%.15e).\n",
+			        j, axisBuf[j], inputfile, material->TAxis[j]);
+			assert(0);
+			exit(1);
+		}
+	}
+	free(axisBuf);
+
+	int **PhaseArray = (int **)malloc(sizeof(int*) * nT);
 	assert(PhaseArray != NULL);
 
     for (int i=0; i<nT; i++)
@@ -342,29 +334,11 @@ int ANEOSReadExtendedTable(ANEOSMATERIAL *material, char *inputfile)
 		assert(PhaseArray[i] != NULL);
 	}
 
-	material->PhaseArray = PhaseArray;
-
-	// Skip rhoAxis
-	if (fseeko(file, (off_t)(nRho * sizeof(double)), SEEK_CUR) != 0) {
-		fprintf(stderr, "ANEOSReadExtendedTable: Failed to skip rhoAxis in file %s\n", inputfile);
-		assert(0);
-	}
-	
-	// Skip TAxis
-	if (fseeko(file, (off_t)(nT * sizeof(double)), SEEK_CUR) != 0) {
-		fprintf(stderr, "ANEOSReadExtendedTable: Failed to skip TAxis in file %s\n", inputfile);
-		assert(0);
-	}
-	
 	for (int i=0; i< nT; i++)
-	{
-		if (fread(PhaseArray[i], sizeof(PhaseArray[i][0]), nRho, file)==0)
-		{
-		fprintf(stderr, "ANEOSReadExtendedTable: Failed to read from file %s\n", inputfile);
-		assert(0);
-		}
-	}
-	
+		ANEOSReadOrDie(PhaseArray[i], sizeof(PhaseArray[i][0]), nRho, file, "PhaseArray", inputfile);
+
+	/* Only publish the array once it is complete. */
+	material->PhaseArray = PhaseArray;
 	fclose(file);
 
     return 0;
@@ -385,33 +359,24 @@ int ANEOSReadMeltCurve(ANEOSMATERIAL *material, char *inputfile)
 
 	if ((file= fopen(inputfile, "rb")) == NULL)
 	{
-		//fprintf(stderr, "ANEOSReadMeltCurve: Could not open file %s\n", inputfile);
-		return 1;
+		return 1;   /* optional file */
 	}
 
-    /* If the file exists we assume it should be readable. */
-	if (fread(&nRho, sizeof(nRho), 1, file) == 0)
-	{
-		fprintf(stderr, "ANEOSReadMeltCurve: Failed to read from file %s\n", inputfile);
-		assert(0);
-	}
+	ANEOSReadOrDie(&nRho, sizeof(nRho), 1, file, "nRho", inputfile);
 
     if (material->nRho != nRho) {
-		fprintf(stderr, "ANEOSReadMeltCurve: Inconsistent number of grid points.\n");
+		fprintf(stderr, "ANEOSReadMeltCurve: Inconsistent number of grid points in %s "
+		        "(table: %d, main: %d).\n", inputfile, nRho, material->nRho);
         assert(0);
+        exit(1);
     }
 
 	double *T_melt = (double *)malloc(sizeof(double)*nRho);
 	assert(T_melt != NULL);
 
-	if (fread(T_melt, sizeof(T_melt[0]), nRho, file) == 0)
-	{
-	    fprintf(stderr, "ANEOSReadMeltCurve: Failed to read from file %s\n", inputfile);
-	    assert(0);
-	}
+	ANEOSReadOrDie(T_melt, sizeof(T_melt[0]), nRho, file, "T_melt", inputfile);
 
 	fclose(file);
-
 	material->T_melt = T_melt;
 
     return 0;
@@ -526,9 +491,9 @@ double ANEOSTofRhoU(ANEOSMATERIAL *material, double rho, double u)
 	double T = backwardInterpolateTemperatureBilinear(rho*material->CodeUnitstoCGSforRho,u*material->CodeUnitstoCGSforU,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->uArray); 
 	if (T<-1e40)
 	{
-#ifdef EOSLIB_VERBOSE
-		fprintf(stderr,"ANEOSTofRhoU failed for rho = %.15e, u = %.15e\n", rho, u);
-#endif
+		/* Fallback (unchanged behaviour): return the lowest tabulated temperature. */
+		material->nLookupFail++;
+		ANEOS_WARN("ANEOSTofRhoU failed for rho = %.15e, u = %.15e, falling back to T = %.15e\n", rho, u, material->TAxis[0]);
 		T = material->TAxis[0];
 	}
 	return T;
@@ -540,7 +505,7 @@ double ANEOSTofRhoU(ANEOSMATERIAL *material, double rho, double u)
 double ANEOSTofRhoP(ANEOSMATERIAL *material, double rho, double p)
 {
 	double T = backwardInterpolateTemperatureBilinear(rho*material->CodeUnitstoCGSforRho,p*material->CodeUnitstoCGSforP,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->pArray);
-	if (T<-1e40){fprintf(stderr,"ANEOSTofRhoP failed for rho = %.15e, p = %.15e\n", rho, p);}
+	if (T<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSTofRhoP failed for rho = %.15e, p = %.15e\n", rho, p); }
 	return T;
 }
 
@@ -560,7 +525,7 @@ double ANEOSUofPT(ANEOSMATERIAL *material, double p, double T)
 double ANEOSUofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
 	double u = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->uArray);
-	if (u<-1e40){fprintf(stderr,"ANEOSUofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);}
+	if (u<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSUofRhoT failed for rho = %.15e, T = %.15e\n", rho, T); }
 	u *= material->CGStoCodeUnitsforU;
 	return u;
 }
@@ -591,7 +556,7 @@ double ANEOSPofUT(ANEOSMATERIAL *material, double u, double T)
 double ANEOSPofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
 	double p = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->pArray);
-	if (p<-1e40){fprintf(stderr,"ANEOSPofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);}
+	if (p<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSPofRhoT failed for rho = %.15e, T = %.15e\n", rho, T); }
 	p *= material->CGStoCodeUnitsforP;
 	return p;
 }
@@ -612,7 +577,7 @@ double ANEOSPofRhoU(ANEOSMATERIAL *material, double rho, double u)
 double ANEOSRhoofUT(ANEOSMATERIAL *material, double u, double T)
 {
 	double rho = backwardInterpolateDensityBilinear(T,u*material->CodeUnitstoCGSforU,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->uArray);
-	if (rho<-1e40){fprintf(stderr,"ANEOSRhoofUT failed for u = %.15e, T = %.15e\n", u, T);}
+	if (rho<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSRhoofUT failed for u = %.15e, T = %.15e\n", u, T); }
 	rho *= material->CGStoCodeUnitsforRho;
 	return rho;
 }
@@ -623,7 +588,7 @@ double ANEOSRhoofUT(ANEOSMATERIAL *material, double u, double T)
 double ANEOSRhoofPT(ANEOSMATERIAL *material, double p, double T)
 {
 	double rho = backwardInterpolateDensityBilinear(T,p*material->CodeUnitstoCGSforP,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->pArray);
-	if (rho<-1e40){fprintf(stderr,"ANEOSRhoofPT failed for p = %.15e, T = %.15e\n", p, T);}
+	if (rho<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSRhoofPT failed for p = %.15e, T = %.15e\n", p, T); }
 	rho *= material->CGStoCodeUnitsforRho;
 	return rho;
 }
@@ -687,7 +652,7 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 	}
 	
 	free(Tdifference);
-	if (rho<-1e40){fprintf(stderr,"ANEOSRhoofPU failed for p = %.15e, u = %.15e\n", p, u);}
+	if (rho<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSRhoofPU failed for p = %.15e, u = %.15e\n", p, u); }
 	return rho;
 }
 
@@ -707,7 +672,7 @@ double ANEOSCofRhoU(ANEOSMATERIAL *material, double rho, double u)
 double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
 	double c = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->cArray);
-	if (c<-1e40){fprintf(stderr,"ANEOSCofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);}
+	if (c<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSCofRhoT failed for rho = %.15e, T = %.15e\n", rho, T); }
 	c *= material->CGStoCodeUnitsforC;
 	return c;
 }
@@ -723,12 +688,25 @@ int ANEOSPhaseofRhoU(ANEOSMATERIAL *material, double rho, double u)
 }
 
 /*
- * Calculates pressure phase(rho,T)
+ * Calculates the phase(rho,T) from the extended EOS table (nearest neighbour).
+ *
+ * Returns -1 if no extended table was loaded for this material or if (rho, T)
+ * lies outside the table.
  */
 int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
+	if (material->PhaseArray == NULL) {
+		material->nLookupFail++;
+		ANEOS_WARN("ANEOSPhaseofRhoT: no extended EOS table loaded for material %d.\n", material->iMat);
+		return -1;
+	}
+
 	int phase = interpolateValueNearest(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->PhaseArray);
-	if (phase<-1){fprintf(stderr,"ANEOSPhaseofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);}
+	if (phase < 0) {
+		material->nLookupFail++;
+		ANEOS_WARN("ANEOSPhaseofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);
+		return -1;
+	}
 	return phase;
 }
 
@@ -739,9 +717,9 @@ double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double 
 {
 	double oldT = ANEOSTofRhoU(material,rho1,u1);
 	double oldS = interpolateValueBilinear(rho1*material->CodeUnitstoCGSforRho, oldT, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->sArray);
-	if (oldS<-1e40){fprintf(stderr,"ANEOSisentropicU oldS failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e\n", rho1, u1, rho2);}
+	if (oldS<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSisentropicU oldS failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e\n", rho1, u1, rho2); }
 	double newT = backwardInterpolateTemperatureBilinear(rho2*material->CodeUnitstoCGSforRho,oldS,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->sArray);
-	if (newT<-1e40){fprintf(stderr,"ANEOSisentropicU newT failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e\n", rho1, u1, rho2);}
+	if (newT<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSisentropicU newT failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e\n", rho1, u1, rho2); }
 	double newu = ANEOSUofRhoT(material,rho2,newT);
 	return newu;
 }
@@ -757,27 +735,47 @@ double ANEOSSofRhoU(ANEOSMATERIAL *material, double rho, double u)
 }
 
 /*
- * Calculates the entropy S(rho,T)
+ * Calculates the entropy S(rho,T).
+ * Returned in cgs (erg/g/K) directly from the table; no unit conversion by design.
  */
 double ANEOSSofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
 	double S = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->sArray);
-	if (S<-1e40){fprintf(stderr,"ANEOSSofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);}
+	if (S<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSSofRhoT failed for rho = %.15e, T = %.15e\n", rho, T); }
     return S;
 }
 
 /*
- * Calculates melting temperature T_melt(rho)
+ * Calculates the melting temperature T_melt(rho).
+ *
+ * Outside the tabulated density range the melt curve is held constant at the
+ * nearest edge value (conservative for the strength model: T_melt increases
+ * with compression, so clamping above the table underestimates it).
+ *
+ * Returns -1.0 if the melt curve was not loaded or rho is not a valid density.
  */
 double ANEOSTmeltofRho(ANEOSMATERIAL *material, double rho)
 {
-	/* Check if melting curve was loaded. */
 	if (material->T_melt == NULL) {
-		fprintf(stderr, "ANEOSTmeltofRho: Melt curve was not loaded.\n");
-		assert(0);
+		fprintf(stderr, "ANEOSTmeltofRho: Melt curve was not loaded for material %d.\n", material->iMat);
+		return -1.0;
 	}
-	/* Return 0 if the melt curve is not defined or interpolation fails */
-	double T = interpolateValueLinear(rho*material->CodeUnitstoCGSforRho, material->nRho, material->rhoAxis, material->T_melt);
+
+	double rho_cgs = rho * material->CodeUnitstoCGSforRho;
+	if (!(rho_cgs > 0.0) || !isfinite(rho_cgs)) return -1.0;
+
+	/* Clamp to the tabulated range (upper bound is exclusive in the interpolator). */
+	double rhoMin = material->rhoAxis[0];
+	double rhoMax = material->rhoAxis[material->nRho-1];
+	if (rho_cgs <= rhoMin) return material->T_melt[0];
+	if (rho_cgs >= rhoMax) return material->T_melt[material->nRho-1];
+
+	double T = interpolateValueLinear(rho_cgs, material->nRho, material->rhoAxis, material->T_melt);
+	if (T < -1e40) {
+		/* Cannot happen after the clamp, but keep the contract explicit. */
+		fprintf(stderr, "ANEOSTmeltofRho: interpolation failed for rho = %.15e\n", rho);
+		return -1.0;
+	}
 	return T;
 }
 

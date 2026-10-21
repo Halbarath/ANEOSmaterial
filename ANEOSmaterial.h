@@ -39,6 +39,18 @@
 
 #define ANEOS_N_MATERIAL_MAX 100
 
+/*
+ * Diagnostics. Lookup failures (rho or T outside the table, failed inversion)
+ * are counted here and reported to stderr only if EOSLIB_VERBOSE is defined.
+ * Return values on failure are unchanged: ANEOSTofRhoU falls back to TAxis[0];
+ * all other functions return -1e50 (scaled to code units where applicable).
+ */
+#ifdef EOSLIB_VERBOSE
+#define ANEOS_WARN(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define ANEOS_WARN(...) ((void)0)
+#endif
+
 typedef struct ANEOSmaterial
 {
 	int iMat; // Material number
@@ -82,6 +94,9 @@ typedef struct ANEOSmaterial
     double Gamma; // Shear modulus
     int fixedGamma;
 
+    /* Diagnostics: number of lookup failures since init (see ANEOS_WARN). */
+    long nLookupFail;
+
 } ANEOSMATERIAL;
 
 // Initialization and finalization
@@ -117,13 +132,18 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u);
 double ANEOSCofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T);
 
-// These functions are for extended EOS tables.
+// These functions are for extended EOS tables. Both return -1 if no extended
+// table is loaded or (rho, T) is outside it.
 int ANEOSPhaseofRhoU(ANEOSMATERIAL *material, double rho, double u);
 int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T);
+
+// Melt temperature from the optional _tmelt table, clamped to the table's
+// density range. Returns -1.0 if no melt curve is loaded or rho is invalid.
 double ANEOSTmeltofRho(ANEOSMATERIAL *material, double rho);
 
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2);
 
+/* Entropy: returned in cgs (erg/g/K) as tabulated, not converted to code units. */
 double ANEOSSofRhoU(ANEOSMATERIAL *material, double rho, double u);
 double ANEOSSofRhoT(ANEOSMATERIAL *material, double rho, double T);
 
