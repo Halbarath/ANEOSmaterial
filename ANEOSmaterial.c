@@ -703,7 +703,7 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 		}
 		if (gc == 0.0) break;
 		if ((gc < 0.0) == (ga < 0.0)) { a = c; ga = gc; }
-		else                          { b = c }
+		else                          { b = c; }
 	}
 
 	return c * material->CGStoCodeUnitsforRho;
