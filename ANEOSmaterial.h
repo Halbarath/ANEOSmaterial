@@ -25,10 +25,10 @@
 #define ANEOSMATERIAL_HINCLUDED
 #include <stdio.h>
 
-#define ANEOS_VERSION_TEXT    "1.0.3"
+#define ANEOS_VERSION_TEXT    "1.0.4"
 #define ANEOS_VERSION_MAJOR   1
 #define ANEOS_VERSION_MINOR   0
-#define ANEOS_VERSION_PATCH   3
+#define ANEOS_VERSION_PATCH   4
 
 #define MAT_ANEOS_ICE         52
 #define MAT_ANEOS_DUNITE      54
