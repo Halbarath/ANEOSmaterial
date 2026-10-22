@@ -636,72 +636,144 @@ double ANEOSRhoofPT(ANEOSMATERIAL *material, double p, double T)
 }
 
 /*
- * g(rho) = P(rho, u) - P in table (cgs) coordinates. Uses the cell solver
- * directly so an out-of-table u is reported as -1e50 rather than clamped.
+ * g(rho) = P(rho, u) - P in table (cgs) units.
+ *
+ * *outside reports whether the state (rho, u) exists in the table: 0 if it
+ * does, +-1 if u lies below the cold curve u(rho, TAxis[0]) (the state would
+ * be colder than the table), +-2 if u lies above u(rho, TAxis[nT-1]) (hotter
+ * than the table). The sign is the sign g must be given for bracketing: + when
+ * the attainable region lies at lower density (the cold curve increases, or
+ * the top row decreases, with rho), - when it lies at higher density. In both
+ * cases 0.0 is returned as value; the caller uses only *outside.
+ * Close to the cold curve the tabulated P(rho, u) may decrease with rho
+ * (large effective Gamma at low T), so rho(P, u) can be double-valued
+ * there; the bisection then finds the lower root only if it does not
+ * step over it, and otherwise reports failure.
+ *
+ * Returns -1e50 (with *outside = 0) when u is unattainable for any other
+ * reason: rho outside the table, or u in a gap of a non-monotonic u(T) line.
  */
-static double ANEOSRhoofPUResidual(ANEOSMATERIAL *material, double rho_cgs, double p_cgs, double u_cgs)
+static double ANEOSRhoofPUResidual(ANEOSMATERIAL *material, double rho_cgs, double p_cgs, double u_cgs, int *outside)
 {
 	int i, j;
 	double x, y, T;
+
+	*outside = 0;
 	if (backwardInterpolateTemperatureCell(rho_cgs, u_cgs, material->nT, material->nRho,
-	        material->rhoAxis, material->TAxis, material->uArray, &i, &j, &x, &y, &T) != 0)
-		return -1e50;
-	return interpolateCellBilinear(material->pArray, i, j, x, y) - p_cgs;
+	        material->rhoAxis, material->TAxis, material->uArray, &i, &j, &x, &y, &T) == 0)
+		return interpolateCellBilinear(material->pArray, i, j, x, y) - p_cgs;
+
+	if (rho_cgs < material->rhoAxis[0] || rho_cgs >= material->rhoAxis[material->nRho-1]) return -1e50;
+	i = findIndex(rho_cgs, material->rhoAxis, material->nRho);
+	x = (rho_cgs - material->rhoAxis[i]) / (material->rhoAxis[i+1] - material->rhoAxis[i]);
+	int jn = material->nT - 1;
+	double u0 = (1.0 - x) * material->uArray[i][0]  + x * material->uArray[i+1][0];
+	double un = (1.0 - x) * material->uArray[i][jn] + x * material->uArray[i+1][jn];
+	if (u_cgs < u0)      *outside = (material->uArray[i+1][0]  > material->uArray[i][0])  ? +1 : -1;
+	else if (u_cgs > un) *outside = (material->uArray[i+1][jn] > material->uArray[i][jn]) ? -2 : +2;
+	else return -1e50;
+	return 0.0;
+}
+
+/*
+ * Refine a sign change of g between the densities a and b by bisection.
+ * Returns 1 and the root in *prho (cgs) on success, 0 if the bracket turned
+ * out to be an artefact of the table edge (the caller keeps scanning), and
+ * -1 if the residual became undefined (gap of a non-monotonic u(T) line).
+ */
+static int ANEOSRhoofPURefine(ANEOSMATERIAL *material, double p_cgs, double u_cgs,
+        double a, double ga, int outA, double b, double gb, int outB, double *prho)
+{
+	const double tol = 1e-10;
+	const int maxIter = 100;
+
+	/* Reference for the final acceptance test: an attainable end of the
+	 * initial bracket (or the first attainable midpoint) and the bracket width. */
+	double w0 = b - a, g0 = 0.0;
+	int haveRef = 0;
+	if (outA == 0)      { g0 = ga; haveRef = 1; }
+	else if (outB == 0) { g0 = gb; haveRef = 1; }
+	int negA = outA ? (outA < 0) : (ga < 0.0);
+
+	for (int n = 0; n < maxIter && 2.0 * (b - a) / (a + b) > tol; n++) {
+		int out;
+		double c = 0.5 * (a + b);
+		double gc = ANEOSRhoofPUResidual(material, c, p_cgs, u_cgs, &out);
+		if (gc < -1e40) return -1;
+		if (out == 0 && gc == 0.0) { *prho = c; return 1; }
+		if (out == 0 && !haveRef) { g0 = gc; haveRef = 1; }
+		int neg = out ? (out < 0) : (gc < 0.0);
+		if (neg == negA) { a = c; ga = gc; outA = out; }
+		else             { b = c; gb = gc; outB = out; }
+	}
+
+	if (outA == 0 && outB == 0) { *prho = 0.5 * (a + b); return 1; }
+	if (outA != 0 && outB != 0) return 0;   /* attainable band narrower than tol, or none */
+	/* One end on the edge of the attainable region: the root is genuine only
+	 * if the residual there has shrunk with the bracket. */
+	double gx = outA ? gb : ga;
+	if (fabs(gx) > 8.0 * fabs(g0) * (b - a) / w0) return 0;
+	*prho = outA ? b : a;
+	return 1;
 }
 
 /*
  * Calculates density rho(p,u): the density at which P(rho, u) = p.
  *
- * The residual is evaluated at every tabulated density where u is attainable;
- * the first interval (scanning from low to high density) where it changes
- * sign is refined by bisection to a relative tolerance. If several roots
- * exist the lowest-density one is returned (library convention).
+ * The residual is evaluated at every tabulated density, scanning from low to
+ * high density; the first interval where it changes sign is refined by
+ * bisection to a relative tolerance. If several roots exist the lowest-density
+ * one is returned (library convention).
  *
- * Returns rho in code units, or -1e50 if no bracketed root exists.
+ * For a cold compressed state the next tabulated density above the root is
+ * already too cold for u (u lies below the cold curve there), so the root
+ * could not be bracketed between two attainable densities. Densities at
+ * which u is outside the tabulated T range therefore take part with the
+ * sign of the side on which the attainable region lies (see
+ * ANEOSRhoofPUResidual). A sign change between two densities that are both
+ * too cold, or both too hot, is an artefact and is ignored; between a too
+ * cold and a too hot one the attainable band lies in between and is found
+ * by the bisection. A bracket whose bisection ends on the boundary of the
+ * attainable region without the residual vanishing there is an artefact of
+ * the table edge as well, and the scan continues past it.
+ *
+ * Returns rho in code units, or -1e50 if no root exists.
  */
 double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 {
-	const double tol = 1e-10;
-	const int maxIter = 100;
 	double p_cgs = p * material->CodeUnitstoCGSforP;
 	double u_cgs = u * material->CodeUnitstoCGSforU;
 	int nRho = material->nRho;
 
-	double a = -1.0, b = -1.0, ga = 0.0;
-	double gprev = -1e50;
+	double gprev = 0.0;
+	int outPrev = 0, iprev = -1;
 	for (int i = 0; i < nRho - 1; i++) {
-		double g = ANEOSRhoofPUResidual(material, material->rhoAxis[i], p_cgs, u_cgs);
-		if (g > -1e40) {
-			if (g == 0.0) return material->rhoAxis[i] * material->CGStoCodeUnitsforRho;
-			if (gprev > -1e40 && (g < 0.0) != (gprev < 0.0)) {
-				a = material->rhoAxis[i-1]; ga = gprev;
-				b = material->rhoAxis[i];
-				break;
+		int out;
+		double g = ANEOSRhoofPUResidual(material, material->rhoAxis[i], p_cgs, u_cgs, &out);
+		if (g < -1e40) continue;
+		if (out == 0 && g == 0.0) return material->rhoAxis[i] * material->CGStoCodeUnitsforRho;
+		int neg = out ? (out < 0) : (g < 0.0);
+		if (iprev >= 0) {
+			int negPrev = outPrev ? (outPrev < 0) : (gprev < 0.0);
+			if (neg != negPrev && !(out != 0 && abs(out) == abs(outPrev))) {
+				double rho;
+				int r = ANEOSRhoofPURefine(material, p_cgs, u_cgs,
+				            material->rhoAxis[iprev], gprev, outPrev, material->rhoAxis[i], g, out, &rho);
+				if (r > 0) return rho * material->CGStoCodeUnitsforRho;
+				if (r < 0) {
+					material->nLookupFail++;
+					ANEOS_WARN("ANEOSRhoofPU: residual undefined between rho = %.15e and %.15e for p = %.15e, u = %.15e\n",
+					           material->rhoAxis[iprev] * material->CGStoCodeUnitsforRho,
+					           material->rhoAxis[i] * material->CGStoCodeUnitsforRho, p, u);
+					return -1e50;
+				}
 			}
 		}
-		gprev = g;
+		gprev = g; outPrev = out; iprev = i;
 	}
-	if (a < 0.0) {
-		material->nLookupFail++;
-		ANEOS_WARN("ANEOSRhoofPU: no bracket found for p = %.15e, u = %.15e\n", p, u);
-		return -1e50;
-	}
-
-	double c = 0.5 * (a + b);
-	for (int n = 0; n < maxIter && 2.0 * (b - a) / (a + b) > tol; n++) {
-		c = 0.5 * (a + b);
-		double gc = ANEOSRhoofPUResidual(material, c, p_cgs, u_cgs);
-		if (gc < -1e40) {
-			material->nLookupFail++;
-			ANEOS_WARN("ANEOSRhoofPU: residual undefined at rho = %.15e for p = %.15e, u = %.15e\n",
-			           c * material->CGStoCodeUnitsforRho, p, u);
-			return -1e50;
-		}
-		if (gc == 0.0) break;
-		if ((gc < 0.0) == (ga < 0.0)) { a = c; ga = gc; }
-		else                          { b = c; }
-	}
-	return c * material->CGStoCodeUnitsforRho;
+	material->nLookupFail++;
+	ANEOS_WARN("ANEOSRhoofPU: no root found for p = %.15e, u = %.15e\n", p, u);
+	return -1e50;
 }
 
 /*
