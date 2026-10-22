@@ -758,12 +758,9 @@ double ANEOSPCTofRhoU(ANEOSMATERIAL *material, double rho, double u, double *c, 
 		Tcell = material->TAxis[0];
 	}
 
-	/* The inversion tolerates y in [-1e-4, 1+1e-4]; evaluate P and c inside the cell. */
-	double ye = (y < 0.0) ? 0.0 : ((y > 1.0) ? 1.0 : y);
-
 	*T = Tcell;
-	*c = interpolateCellBilinear(material->cArray, i, j, x, ye) * material->CGStoCodeUnitsforC;
-	return interpolateCellBilinear(material->pArray, i, j, x, ye) * material->CGStoCodeUnitsforP;
+	*c = interpolateCellBilinear(material->cArray, i, j, x, y) * material->CGStoCodeUnitsforC;
+	return interpolateCellBilinear(material->pArray, i, j, x, y) * material->CGStoCodeUnitsforP;
 }
 
 /*

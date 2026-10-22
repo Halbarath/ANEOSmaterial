@@ -70,7 +70,6 @@ static inline int findIndex(double x, const double* xAxis, int nX)
 }
 
 double backwardInterpolateTemperatureBilinear(double rho, double z, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray);
-double backwardInterpolateTemperatureBilinear_Scan(double rho, double z, int nT, int nRho,const double* rhoAxis, const double* TAxis, double* const* zArray);
 double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray);
 double interpolateValueBilinear(double rho, double T, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray);
 int interpolateValueNearest(double rho, double T, int nT, int nRho, const double* rhoAxis, const double* TAxis, int* const* zArray);
