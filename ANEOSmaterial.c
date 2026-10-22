@@ -66,7 +66,9 @@ ANEOSMATERIAL *ANEOSinitMaterial(int iMat, double dKpcUnit, double dMsolUnit)
             strcpy(inputfile, "MANEOStable_water.in");
 			break;
 		default:
+			fprintf(stderr, "ANEOSinitMaterial: unknown ANEOS material %d.\n", iMat);
 			assert(0);
+			exit(1);
 	}
     
     ANEOSMATERIAL *material;
@@ -569,9 +571,8 @@ double ANEOSUofPT(ANEOSMATERIAL *material, double p, double T)
 double ANEOSUofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
 	double u = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->uArray);
-	if (u<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSUofRhoT failed for rho = %.15e, T = %.15e\n", rho, T); }
-	u *= material->CGStoCodeUnitsforU;
-	return u;
+	if (u<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSUofRhoT failed for rho = %.15e, T = %.15e\n", rho, T); return -1e50; }
+	return u * material->CGStoCodeUnitsforU;
 }
 
 /*
@@ -600,9 +601,8 @@ double ANEOSPofUT(ANEOSMATERIAL *material, double u, double T)
 double ANEOSPofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
 	double p = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->pArray);
-	if (p<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSPofRhoT failed for rho = %.15e, T = %.15e\n", rho, T); }
-	p *= material->CGStoCodeUnitsforP;
-	return p;
+	if (p<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSPofRhoT failed for rho = %.15e, T = %.15e\n", rho, T); return -1e50; }
+	return p * material->CGStoCodeUnitsforP;
 }
 
 /*
@@ -621,9 +621,8 @@ double ANEOSPofRhoU(ANEOSMATERIAL *material, double rho, double u)
 double ANEOSRhoofUT(ANEOSMATERIAL *material, double u, double T)
 {
 	double rho = backwardInterpolateDensityBilinear(T,u*material->CodeUnitstoCGSforU,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->uArray);
-	if (rho<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSRhoofUT failed for u = %.15e, T = %.15e\n", u, T); }
-	rho *= material->CGStoCodeUnitsforRho;
-	return rho;
+	if (rho<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSRhoofUT failed for u = %.15e, T = %.15e\n", u, T); return -1e50; }
+	return rho * material->CGStoCodeUnitsforRho;
 }
 
 /*
@@ -632,9 +631,8 @@ double ANEOSRhoofUT(ANEOSMATERIAL *material, double u, double T)
 double ANEOSRhoofPT(ANEOSMATERIAL *material, double p, double T)
 {
 	double rho = backwardInterpolateDensityBilinear(T,p*material->CodeUnitstoCGSforP,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->pArray);
-	if (rho<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSRhoofPT failed for p = %.15e, T = %.15e\n", p, T); }
-	rho *= material->CGStoCodeUnitsforRho;
-	return rho;
+	if (rho<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSRhoofPT failed for p = %.15e, T = %.15e\n", p, T); return -1e50; }
+	return rho * material->CGStoCodeUnitsforRho;
 }
 
 /*
@@ -726,9 +724,8 @@ double ANEOSCofRhoU(ANEOSMATERIAL *material, double rho, double u)
 double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
 	double c = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->cArray);
-	if (c<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSCofRhoT failed for rho = %.15e, T = %.15e\n", rho, T); }
-	c *= material->CGStoCodeUnitsforC;
-	return c;
+	if (c<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSCofRhoT failed for rho = %.15e, T = %.15e\n", rho, T); return -1e50; }
+	return c * material->CGStoCodeUnitsforC;
 }
 
 double ANEOSPCTofRhoU(ANEOSMATERIAL *material, double rho, double u, double *c, double *T)
@@ -744,8 +741,8 @@ double ANEOSPCTofRhoU(ANEOSMATERIAL *material, double rho, double u, double *c, 
 		material->nLookupFail++;
 		ANEOS_WARN("ANEOSPCTofRhoU: rho = %.15e outside table for u = %.15e\n", rho, u);
 		*T = material->TAxis[0];
-		*c = -1e50 * material->CGStoCodeUnitsforC;
-		return -1e50 * material->CGStoCodeUnitsforP;
+		*c = -1e50;
+		return -1e50;
 	}
 
 	if (backwardInterpolateTemperatureCell(rho_cgs, u_cgs, material->nT, material->nRho,
@@ -803,17 +800,34 @@ int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T)
 }
 
 /*
- * Calculates the isentropic evolution u2(rho1,u1,rho2)
+ * Calculates the isentropic evolution u2(rho1,u1,rho2).
+ *
+ * If the entropy S(rho1,u1) is not attained at rho2 (the state would fall
+ * below the table), u2 is clamped to the cold curve u(rho2, TAxis[0]), the
+ * same convention ANEOSTofRhoU uses for sub-table states. Returns -1e50 only
+ * if rho2 itself is outside the table.
  */
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2)
 {
 	double oldT = ANEOSTofRhoU(material,rho1,u1);
 	double oldS = interpolateValueBilinear(rho1*material->CodeUnitstoCGSforRho, oldT, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->sArray);
-	if (oldS<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSisentropicU oldS failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e\n", rho1, u1, rho2); }
-	double newT = backwardInterpolateTemperatureBilinear(rho2*material->CodeUnitstoCGSforRho,oldS,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->sArray);
-	if (newT<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSisentropicU newT failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e\n", rho1, u1, rho2); }
-	double newu = ANEOSUofRhoT(material,rho2,newT);
-	return newu;
+	double newT;
+
+	if (oldS<-1e40) {
+		material->nLookupFail++;
+		ANEOS_WARN("ANEOSisentropicU oldS failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e, using cold curve at rho2\n", rho1, u1, rho2);
+		newT = material->TAxis[0];
+	} else {
+		newT = backwardInterpolateTemperatureBilinear(rho2*material->CodeUnitstoCGSforRho,oldS,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->sArray);
+		if (newT<-1e40) {
+			material->nLookupFail++;
+			ANEOS_WARN("ANEOSisentropicU newT failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e, using cold curve at rho2\n", rho1, u1, rho2);
+			newT = material->TAxis[0];
+		}
+	}
+
+	/* ANEOSUofRhoT returns -1e50 if rho2 is outside the table. */
+	return ANEOSUofRhoT(material,rho2,newT);
 }
 
 /*
@@ -1004,6 +1018,7 @@ double ANEOSGammaofRhoT(ANEOSMATERIAL *material, double rho, double T) {
         // and the difference in the resulting shear modulus is less then 25%
         double nu = 0.25;
         double c = ANEOSCofRhoT(material, rho, T);
+        if (c < -1e40) return -1e50;
         double bulkModulus = rho * c * c;
         return bulkModulus * 3.0 * (1.0 - 2.0 * nu) / (2.0 * (1.0 + nu));
     }

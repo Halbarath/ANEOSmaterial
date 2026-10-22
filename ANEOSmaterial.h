@@ -46,8 +46,9 @@
 /*
  * Diagnostics. Lookup failures (rho or T outside the table, failed inversion)
  * are counted here and reported to stderr only if EOSLIB_VERBOSE is defined.
- * Return values on failure are unchanged: ANEOSTofRhoU falls back to TAxis[0];
- * all other functions return -1e50 (scaled to code units where applicable).
+ * On failure ANEOSTofRhoU falls back to TAxis[0]; every other function
+ * returns exactly -1e50, in any unit system, so callers can test for
+ * (value < -1e40) regardless of the unit conversion.
  */
 #ifdef EOSLIB_VERBOSE
 #define ANEOS_WARN(...) fprintf(stderr, __VA_ARGS__)
@@ -149,7 +150,7 @@ double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T);
  * Fused lookup for the hydro code: P(rho,u), c(rho,u) and T(rho,u) from one
  * cell search. Returns P and fills *c and *T, all in code units. On failure
  * behaves like the separate calls: T falls back to TAxis[0]; P and c are the
- * table values at that T, or -1e50 (scaled) if rho is outside the table.
+ * table values at that T, or -1e50 if rho is outside the table.
  */
 double ANEOSPCTofRhoU(ANEOSMATERIAL *material, double rho, double u, double *c, double *T);
 
