@@ -26,6 +26,9 @@
 #include <stdlib.h>
 #include "interpBilinear.h"
 
+#define INTERP_EDGE_TOL 1e-4
+#define INTERP_REL_TOL  1e-12
+
 /*
  * ---------------------------------------------------------------------------
  * Backward interpolation (inversion along one table axis)
@@ -79,6 +82,33 @@ static int scanLine(double* const* zArray, int axis, int fixed, double w, int n,
 }
 
 /*
+ * Relaxed fallback once no cell brackets z exactly:
+ *   1. z overshoots the first or last node by at most edgeTol times the span
+ *      of the end cell -> clamp to that node;
+ *   2. z is within INTERP_REL_TOL of some node value (roundoff on a plateau,
+ *      e.g. u independent of rho in the vapour region) -> that node, lowest
+ *      index first.
+ * Returns 0 and fills k, t on success, -1 otherwise.
+ */
+static int relaxedLocate(double* const* zArray, int axis, int fixed, double w, int n, double z,
+        double edgeTol, int *pk, double *pt)
+{
+    double g0 = lineValue(zArray, axis, fixed, w, 0);
+    double g1 = lineValue(zArray, axis, fixed, w, n-1);
+    double gb = lineValue(zArray, axis, fixed, w, 1);
+    double gt = lineValue(zArray, axis, fixed, w, n-2);
+    double zbelow = g0 - edgeTol * (gb - g0);
+    double zabove = g1 + edgeTol * (g1 - gt);
+    if ((zbelow <= z && z <= g0) || (g0 <= z && z <= zbelow)) { *pk = 0;   *pt = 0.0; return 0; }
+    if ((g1 <= z && z <= zabove) || (zabove <= z && z <= g1)) { *pk = n-2; *pt = 1.0; return 0; }
+    for (int k = 0; k < n - 1; k++) {
+        double gk = lineValue(zArray, axis, fixed, w, k);
+        if (fabs(z - gk) <= INTERP_REL_TOL * fmax(fabs(z), fabs(gk))) { *pk = k; *pt = 0.0; return 0; }
+    }
+    return -1;
+}
+
+/*
  * Invert the piecewise linear line: find k and t in [0,1] with
  *
  *   z = (1-t) node[k] + t node[k+1].
@@ -86,12 +116,12 @@ static int scanLine(double* const* zArray, int axis, int fixed, double w, int n,
  * Fast path: if the end-point node values bracket z, a binary search over k
  * finds the cell, which assumes the line is monotonic. If the end points do
  * not bracket z, or the search lands in a cell that does not (non-monotonic
- * line), a linear scan returns the lowest-index bracketing cell; when several
- * roots exist the lowest-index one is returned (library convention).
- *
- * edgeTol: z may overshoot the first or last node by up to edgeTol times the
- * span of the end cell and is then clamped to that node (t = 0 or t = 1).
- * This keeps states a hair outside the table from failing outright.
+ * line), a linear scan returns the lowest-index bracketing cell;
+ * When several roots exist the result depends on the path: the binary search
+ * returns the root it bisects onto (normally the one in the monotonic bulk of
+ * the line); the scan fallback returns the lowest-index one.
+ * if no cell brackets z exactly, relaxedLocate() applies the edge and roundoff
+ * tolerances.
  *
  * Returns 0 on success, -1 if z is not attained anywhere along the line.
  */
@@ -102,6 +132,7 @@ static int invertLine(double* const* zArray, int axis, int fixed, double w, int 
     double g1 = lineValue(zArray, axis, fixed, w, n-1);
     int lo, hi;
     double glo, ghi;
+    int bracketed = 0;
 
     if ((g0 < z) != (g1 < z) || g0 == z || g1 == z) {
         /* Bracketed by the end points: binary search over node indices. */
@@ -112,22 +143,12 @@ static int invertLine(double* const* zArray, int axis, int fixed, double w, int 
             if ((gmid < z) == (glo < z) && gmid != z) { lo = mid; glo = gmid; }
             else                                      { hi = mid; ghi = gmid; }
         }
-        /* A non-monotonic line can fool the search: verify, else scan. */
-        if (!((glo <= z && z <= ghi) || (ghi <= z && z <= glo))) {
-            if (scanLine(zArray, axis, fixed, w, n, z, &lo, &glo, &ghi) != 0) return -1;
-            hi = lo + 1;
-        }
-    } else {
-        /* Not bracketed by the end points: scan, then try the edge tolerance. */
-        if (scanLine(zArray, axis, fixed, w, n, z, &lo, &glo, &ghi) != 0) {
-            double gb = lineValue(zArray, axis, fixed, w, 1);     /* node next to the first */
-            double gt = lineValue(zArray, axis, fixed, w, n-2);   /* node next to the last  */
-            double zbelow = g0 - edgeTol * (gb - g0);             /* first cell extended to t = -edgeTol */
-            double zabove = g1 + edgeTol * (g1 - gt);             /* last cell extended to t = 1 + edgeTol */
-            if ((zbelow <= z && z <= g0) || (g0 <= z && z <= zbelow)) { *pk = 0;   *pt = 0.0; return 0; }
-            if ((g1 <= z && z <= zabove) || (zabove <= z && z <= g1)) { *pk = n-2; *pt = 1.0; return 0; }
-            return -1;
-        }
+        bracketed = (glo <= z && z <= ghi) || (ghi <= z && z <= glo);
+    }
+    if (!bracketed) {
+        /* Non-monotonic line or end points not bracketing: scan. */
+        if (scanLine(zArray, axis, fixed, w, n, z, &lo, &glo, &ghi) != 0)
+            return relaxedLocate(zArray, axis, fixed, w, n, z, edgeTol, pk, pt);
         hi = lo + 1;
     }
 
@@ -142,8 +163,6 @@ static int invertLine(double* const* zArray, int axis, int fixed, double w, int 
     *pt = t;
     return 0;
 }
-
-#define INTERP_EDGE_TOL 1e-4
 
 /*
  * Backward interpolate the temperature: find T with z(rho, T) = z at fixed rho,
@@ -235,70 +254,55 @@ double backwardInterpolateDensityBilinear(double T, double z, int nT, int nRho, 
 }
 
 /*
- * Interpolate a value using nearest neighbor interpolation
+ * Nearest-neighbour lookup in an integer table (used for the phase table).
+ * Returns the value at the table node closest to (rho, T), or -1 if (rho, T)
+ * is outside the table or not a number.
  */
 int interpolateValueNearest(double rho, double T, int nT, int nRho, const double* rhoAxis, const double* TAxis, int* const* zArray)
 {
-    // check if (rho,T) is out of bounds
-    if (rho < rhoAxis[0])
+    // check if (rho,T) is out of bounds (a NaN fails every comparison below)
+    if (!(rho >= rhoAxis[0]))
     {
 #ifdef EOSLIB_VERBOSE
-        fprintf(stderr,"ANEOS interpolateValueBilinear failed, rho = %.15e is smaller than minRho = %.15e\n", rho, rhoAxis[0]);
+        fprintf(stderr,"ANEOS interpolateValueNearest failed, rho = %.15e is smaller than minRho = %.15e\n", rho, rhoAxis[0]);
 #endif
         return -1;
     }
-    if (rho >= rhoAxis[nRho-1])
+    if (!(rho < rhoAxis[nRho-1]))
     {
 #ifdef EOSLIB_VERBOSE
-        fprintf(stderr,"ANEOS interpolateValueBilinear failed, rho = %.15e is larger than maxRho = %.15e\n", rho, rhoAxis[nRho-1]);
+        fprintf(stderr,"ANEOS interpolateValueNearest failed, rho = %.15e is larger than maxRho = %.15e\n", rho, rhoAxis[nRho-1]);
 #endif
         return -1;
     }
-    if (T < TAxis[0])
+    if (!(T >= TAxis[0]))
     {
 #ifdef EOSLIB_VERBOSE
-        fprintf(stderr,"ANEOS interpolateValueBilinear failed, T = %.15e is smaller than minT = %.15e\n", T, TAxis[0]);
+        fprintf(stderr,"ANEOS interpolateValueNearest failed, T = %.15e is smaller than minT = %.15e\n", T, TAxis[0]);
 #endif
         return -1;
     }
-    if (T >= TAxis[nT-1])
+    if (!(T < TAxis[nT-1]))
     {
 #ifdef EOSLIB_VERBOSE
-        fprintf(stderr,"ANEOS interpolateValueBilinear failed, T = %.15e is larger than maxT = %.15e\n", T, TAxis[nT-1]);
+        fprintf(stderr,"ANEOS interpolateValueNearest failed, T = %.15e is larger than maxT = %.15e\n", T, TAxis[nT-1]);
 #endif
         return -1;
     }
 
     // locate the cell (i, j) containing the point; tables are rho-major, zArray[i][j]
     int i=findIndex(rho, rhoAxis, nRho);
-
     int j=findIndex(T, TAxis, nT);
 
     // scaling grid rectangle to unit square
     double x=(rho-rhoAxis[i])/(rhoAxis[i+1]-rhoAxis[i]);
     double y=(T-TAxis[j])/(TAxis[j+1]-TAxis[j]);
 
-    // calculating bilinear interpolation
-    int f00=zArray[i][j];
-    int f01=zArray[i][j+1];
-    int f10=zArray[i+1][j];
-    int f11=zArray[i+1][j+1];
-    
-    if ((x <= 0.5) && (y <= 0.5)) {
-        return f00;
-    } else if ((x <= 0.5) && (y > 0.5)) {
-        return f01;
-    } else if ((x > 0.5) && (y <= 0.5)) {
-        return f10;
-    } else if ((x > 0.5) && (y > 0.5)) {
-        return f11;
-    } else {
-        //return f11;
-        fprintf(stderr, "x= %g y= %g\n", x, y);
-        exit(1);
-    }
+    // pick the nearest of the four cell corners
+    if (x > 0.5) i++;
+    if (y > 0.5) j++;
+    return zArray[i][j];
 }
-
 
 /*
  * Interpolate a value using bilinear interpolation

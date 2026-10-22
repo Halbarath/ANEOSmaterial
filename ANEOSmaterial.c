@@ -636,27 +636,26 @@ double ANEOSRhoofPT(ANEOSMATERIAL *material, double p, double T)
 }
 
 /*
- * g(rho) = T(rho, P) - T(rho, u) in table (cgs) coordinates.
- * Returns -1e50 if either inversion fails at this rho.
+ * g(rho) = P(rho, u) - P in table (cgs) coordinates. Uses the cell solver
+ * directly so an out-of-table u is reported as -1e50 rather than clamped.
  */
 static double ANEOSRhoofPUResidual(ANEOSMATERIAL *material, double rho_cgs, double p_cgs, double u_cgs)
 {
-	double TP = backwardInterpolateTemperatureBilinear(rho_cgs, p_cgs, material->nT, material->nRho,
-	            material->rhoAxis, material->TAxis, material->pArray);
-	double Tu = backwardInterpolateTemperatureBilinear(rho_cgs, u_cgs, material->nT, material->nRho,
-	            material->rhoAxis, material->TAxis, material->uArray);
-	if (TP < -1e40 || Tu < -1e40) return -1e50;
-	return TP - Tu;
+	int i, j;
+	double x, y, T;
+	if (backwardInterpolateTemperatureCell(rho_cgs, u_cgs, material->nT, material->nRho,
+	        material->rhoAxis, material->TAxis, material->uArray, &i, &j, &x, &y, &T) != 0)
+		return -1e50;
+	return interpolateCellBilinear(material->pArray, i, j, x, y) - p_cgs;
 }
 
 /*
- * Calculates density rho(p,u): the density at which the isobar P and the
- * isoenergy u intersect, i.e. T(rho, P) = T(rho, u).
+ * Calculates density rho(p,u): the density at which P(rho, u) = p.
  *
- * The residual is evaluated at every tabulated density; the first interval
- * (scanning from low to high density) where it changes sign is then refined
- * by bisection to a relative tolerance. If several intersections exist the
- * lowest-density one is returned, matching the previous behaviour.
+ * The residual is evaluated at every tabulated density where u is attainable;
+ * the first interval (scanning from low to high density) where it changes
+ * sign is refined by bisection to a relative tolerance. If several roots
+ * exist the lowest-density one is returned (library convention).
  *
  * Returns rho in code units, or -1e50 if no bracketed root exists.
  */
@@ -668,14 +667,13 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 	double u_cgs = u * material->CodeUnitstoCGSforU;
 	int nRho = material->nRho;
 
-	/* Bracket: find consecutive nodes with valid residuals of opposite sign. */
 	double a = -1.0, b = -1.0, ga = 0.0;
 	double gprev = -1e50;
-	for (int i = 0; i < nRho - 1; i++) {        /* rhoAxis[nRho-1] is exclusive */
+	for (int i = 0; i < nRho - 1; i++) {
 		double g = ANEOSRhoofPUResidual(material, material->rhoAxis[i], p_cgs, u_cgs);
-		if (g > -1e40 && gprev > -1e40) {
+		if (g > -1e40) {
 			if (g == 0.0) return material->rhoAxis[i] * material->CGStoCodeUnitsforRho;
-			if ((g < 0.0) != (gprev < 0.0)) {
+			if (gprev > -1e40 && (g < 0.0) != (gprev < 0.0)) {
 				a = material->rhoAxis[i-1]; ga = gprev;
 				b = material->rhoAxis[i];
 				break;
@@ -689,7 +687,6 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 		return -1e50;
 	}
 
-	/* Bisection inside [a, b]. */
 	double c = 0.5 * (a + b);
 	for (int n = 0; n < maxIter && 2.0 * (b - a) / (a + b) > tol; n++) {
 		c = 0.5 * (a + b);
@@ -704,7 +701,6 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 		if ((gc < 0.0) == (ga < 0.0)) { a = c; ga = gc; }
 		else                          { b = c; }
 	}
-
 	return c * material->CGStoCodeUnitsforRho;
 }
 

@@ -79,8 +79,7 @@ int interpolateGradientBilinear(double rho, double T, int nT, int nRho, const do
 /*
  * Backward solve for T at fixed rho, returning the cell and local coordinates
  * so the caller can evaluate other tables in the same cell without searching
- * again. Returns 0 on success (i, j, x, y, T filled; y may lie slightly
- * outside [0,1] within the inversion tolerance), -1 on failure.
+ * again. Returns 0 on success (i, j, x, y, T filled; y in [0,1]), -1 on failure.
  */
 int backwardInterpolateTemperatureCell(double rho, double z, int nT, int nRho, const double* rhoAxis, const double* TAxis, double* const* zArray, int *pi, int *pj, double *px, double *py, double *pT);
 #endif
