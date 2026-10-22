@@ -1,5 +1,5 @@
 /*  This file is part of ANEOSmaterial.
- *  Copyright (c) 2020-2021 Thomas Meier & Christian Reinhardt
+ *  Copyright (c) 2020-2026 Thomas Meier & Christian Reinhardt
  *
  *  ANEOSmaterial is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@
  *
  * Inverting either is: find the cell whose two node values bracket z, then
  * solve the linear function for the local coordinate. invertLine() does this
- * for both axes; the two public functions only translate between table
+ * for both axes; the public functions only translate between table
  * coordinates and physical (rho, T).
  * ---------------------------------------------------------------------------
  */
@@ -383,7 +383,7 @@ double interpolateValueLinear(double x, int nX, const double* xAxis, const doubl
     }
 
     // searching for grid rectangle containing the point
-    // could be calculated if grid is guarantied to be logarithmic
+    // could be calculated if grid is guaranteed to be logarithmic
     // as we do not assume that, we search for the grid rectangle
     int i=findIndex(x, xAxis, nX);
 

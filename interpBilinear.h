@@ -1,5 +1,5 @@
 /*  This file is part of ANEOSmaterial.
- *  Copyright (c) 2020-2021 Thomas Meier & Christian Reinhardt
+ *  Copyright (c) 2020-2026 Thomas Meier & Christian Reinhardt
  *
  *  ANEOSmaterial is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -42,6 +42,7 @@ static inline double interpolateCellBilinear(double* const* zArray, int i, int j
     double f11=zArray[i+1][j+1];
     return y*(f11*x - f01*(x - 1.0)) - (f10*x - f00*(x - 1.0))*(y - 1.0);
 }
+
 /*
  * Find i such that xAxis[i] <= x < xAxis[i+1] for a strictly increasing axis.
  *

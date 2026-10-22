@@ -1,5 +1,5 @@
 /*  This file is part of ANEOSmaterial.
- *  Copyright (c) 2020-2021 Thomas Meier & Christian Reinhardt
+ *  Copyright (c) 2020-2026 Thomas Meier & Christian Reinhardt
  *
  *  ANEOSmaterial is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -25,6 +25,13 @@
 #define ANEOSMATERIAL_HINCLUDED
 #include <stdio.h>
 
+/*
+ * Version history
+ *   1.0.4  ANEOSRhoofPU: brackets roots next to the cold curve, rejects edge
+ *          artefacts and keeps scanning past them; fused ANEOSPCTofRhoU;
+ *          failure sentinel is exactly -1e50 in every unit system;
+ *          interpolateValueNearest rejects NaN instead of aborting.
+ */
 #define ANEOS_VERSION_TEXT    "1.0.4"
 #define ANEOS_VERSION_MAJOR   1
 #define ANEOS_VERSION_MINOR   0
@@ -47,8 +54,9 @@
  * Diagnostics. Lookup failures (rho or T outside the table, failed inversion)
  * are counted here and reported to stderr only if EOSLIB_VERBOSE is defined.
  * On failure ANEOSTofRhoU falls back to TAxis[0]; every other function
- * returns exactly -1e50, in any unit system, so callers can test for
- * (value < -1e40) regardless of the unit conversion.
+ * returning a double returns exactly -1e50, in any unit system, so callers
+ * can test for (value < -1e40) regardless of the unit conversion. The phase
+ * lookups return -1 and ANEOSTmeltofRho returns -1.0 (see below).
  */
 #ifdef EOSLIB_VERBOSE
 #define ANEOS_WARN(...) fprintf(stderr, __VA_ARGS__)
@@ -58,45 +66,45 @@
 
 typedef struct ANEOSmaterial
 {
-	int iMat; // Material number
-	double rho0; // reference density
-	int nRho; // Number of entries in the interpolation arrays in the rho dimension
-	int nT; // Number of entries in the interpolation arrays in the T dimension
-	char matName[256];
+    int iMat; // Material number
+    double rho0; // reference density
+    int nRho; // Number of entries in the interpolation arrays in the rho dimension
+    int nT; // Number of entries in the interpolation arrays in the T dimension
+    char matName[256];
     char matstring[1024];
-	
-	// unit conversion
-	double CodeUnitstoCGSforU;
-	double CodeUnitstoCGSforP;
-	double CodeUnitstoCGSforRho;
-	double CodeUnitstoCGSforC;
+
+    // unit conversion
+    double CodeUnitstoCGSforU;
+    double CodeUnitstoCGSforP;
+    double CodeUnitstoCGSforRho;
+    double CodeUnitstoCGSforC;
     double CGStoCodeUnitsforU;
     double CGStoCodeUnitsforP;
     double CGStoCodeUnitsforRho;
     double CGStoCodeUnitsforC;
-	
-	/*
-	 * Interpolation tables. Each is one contiguous block, rho-major:
-	 *   xData[i*nT + j] = x(rhoAxis[i], TAxis[j])
-	 * and xArray[i] points at column i, so xArray[i][j] indexes the same
-	 * element. The inner index j (temperature) is contiguous, which is what
-	 * the backward T search and the bilinear cell evaluation walk.
-	 * The on-disk format is unchanged (T-major); the transpose happens at load.
-	 */
-	double *rhoAxis;
-	double *TAxis;
-	double *uData, *pData, *cData, *sData;
-	double **uArray;
-	double **pArray;
-	double **cArray;
-	double **sArray;
 
-	// Optional phase table, same layout
-	int *phaseData;
-	int **PhaseArray;
+    /*
+     * Interpolation tables. Each is one contiguous block, rho-major:
+     *   xData[i*nT + j] = x(rhoAxis[i], TAxis[j])
+     * and xArray[i] points at column i, so xArray[i][j] indexes the same
+     * element. The inner index j (temperature) is contiguous, which is what
+     * the backward T search and the bilinear cell evaluation walk.
+     * The on-disk format is unchanged (T-major); the transpose happens at load.
+     */
+    double *rhoAxis;
+    double *TAxis;
+    double *uData, *pData, *cData, *sData;
+    double **uArray;
+    double **pArray;
+    double **cArray;
+    double **sArray;
+
+    // Optional phase table, same layout
+    int *phaseData;
+    int **PhaseArray;
 
     // Melt curve (optional)
-	double *T_melt;
+    double *T_melt;
 
     // Yield parameters (optional)
     int yieldStrengthModel;

@@ -29,8 +29,8 @@
  *
  * Known table defects (cells with non-positive heat capacity or decreasing
  * entropy along T) are reported in the first test and skipped by the tests
- * that depend on them, since the library's documented response to them
- * (lowest root, or the -1e50 sentinel) is the one being tested.
+ * that depend on them: there the library's documented response (some root of
+ * a non-monotonic line, or the -1e50 sentinel) is not an invariant.
  */
 #include <float.h>
 #include <math.h>
@@ -77,6 +77,7 @@ static const char *currentTest = "";
 static int isSentinel(double v) { return v < -1e40; }
 
 /* Sample points: interior of the table, log-spaced in rho and T. */
+/* 100 for a quick run (seconds); 1000 for a full sweep (minutes). */
 #define NSAMPLE_RHO 1000
 #define NSAMPLE_T   1000
 #define SAMPLE_OFFSET 0.0137   /* keeps log-spaced samples off the table nodes */
@@ -419,7 +420,7 @@ static void testIsentrope(ANEOSMATERIAL *m)
         double S1 = ANEOSSofRhoU(m, rho1, u1);
 
         /* Identity: S is always reproduced; u only if S(T) is monotonic at
-         * this rho (otherwise the lowest root of S is returned, a table defect). */
+         * this rho (otherwise another root of S may be returned, a table defect). */
         double uSame = ANEOSisentropicU(m, rho1, u1, rho1);
         if (isSentinel(uSame)) { CHECK(0, "isentropicU failed rho=%g->%g", rho1, rho1); continue; }
         CHECK_REL(ANEOSSofRhoU(m, rho1, uSame), S1, entropyRoundTripTol(m, rho1, T1, S1),
