@@ -116,12 +116,13 @@ static int relaxedLocate(double* const* zArray, int axis, int fixed, double w, i
  * Fast path: if the end-point node values bracket z, a binary search over k
  * finds the cell, which assumes the line is monotonic. If the end points do
  * not bracket z, or the search lands in a cell that does not (non-monotonic
- * line), a linear scan returns the lowest-index bracketing cell;
+ * line), a linear scan returns the lowest-index bracketing cell; if no cell
+ * brackets z exactly, relaxedLocate() applies the edge and roundoff
+ * tolerances.
+ *
  * When several roots exist the result depends on the path: the binary search
  * returns the root it bisects onto (normally the one in the monotonic bulk of
  * the line); the scan fallback returns the lowest-index one.
- * if no cell brackets z exactly, relaxedLocate() applies the edge and roundoff
- * tolerances.
  *
  * Returns 0 on success, -1 if z is not attained anywhere along the line.
  */
