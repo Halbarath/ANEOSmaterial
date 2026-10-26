@@ -58,10 +58,14 @@
  *   1.0.0  extracted from ANEOSmaterial 1.0.4 (interpBilinear.c) and the
  *          scvheos 1.1 / reos3 1.1 cell arithmetic; closed intervals with
  *          roundoff tolerance; status codes instead of sentinels; one
- *          inversion with a strict (monotonic) and a scanning mode.
+ *          inversion with a strict (monotonic) and a tolerant mode.
  *   1.0.1  interpLocateAxis: edge tolerance relative to the bound instead
  *          of tol*(1 + |x|), which was an absolute 1e-13 on a linear axis
  *          starting at 1e-25 and let far-out-of-range densities through.
+ *   1.0.2  INTERP_INVERT_SCAN renamed INTERP_INVERT_TOLERANT and the flag
+ *          bScan renamed bFallback: the mode bisects like the strict one and
+ *          only scans as a fallback, which the old name suggested otherwise.
+ *          No change in behaviour.
  */
 #ifndef INTERPBILINEAR_HINCLUDED
 #define INTERPBILINEAR_HINCLUDED
@@ -69,10 +73,10 @@
 #include <math.h>
 #include <stddef.h>
 
-#define INTERP_VERSION_TEXT   "1.0.1"
+#define INTERP_VERSION_TEXT   "1.0.2"
 #define INTERP_VERSION_MAJOR  1
 #define INTERP_VERSION_MINOR  0
-#define INTERP_VERSION_PATCH  1
+#define INTERP_VERSION_PATCH  2
 
 /*
  * Status codes. Everything that is not INTERP_SUCCESS is negative.
@@ -109,37 +113,44 @@ typedef struct interpCell {
 /*
  * Options of interpInvertLine.
  *
- *   bScan    0: strict mode. The line is assumed to increase monotonically;
- *               a bisection on the node index finds the segment. A target
- *               outside [f_0, f_n-1] fails with INTERP_BELOW/INTERP_ABOVE,
- *               a segment that does not bracket the target (which only
- *               happens on a non-monotonic line) with INTERP_NONMONOTONIC.
- *            1: scan mode. If the end nodes bracket the target, a sign
- *               bisection finds a bracketing segment on any line. Otherwise
- *               a linear scan returns the lowest-index bracketing segment,
- *               and if none brackets the target exactly, the edge and node
- *               tolerances below are tried before INTERP_NOT_ATTAINED.
- *   valTol   relative roundoff tolerance on the target at the line ends: a
- *            target within valTol*(1 + |target|) outside [f_0, f_n-1] is
- *            clamped onto the nearer end instead of failing (both modes).
- *   edgeTol  scan mode only: a target overshooting the first (last) node by
- *            at most edgeTol times the span of the first (last) segment is
- *            clamped onto that node.
- *   nodeTol  scan mode only: a target within nodeTol*max(|target|, |f_k|)
- *            of some node value f_k (roundoff on a plateau) is located at
- *            that node, lowest index first.
+ * Both modes start with a bisection on the node index, O(log n); they
+ * differ in what happens when the bisection cannot bracket the target.
+ *
+ *   bFallback 0: strict mode. The line is assumed to increase monotonically
+ *                and a monotone bisection finds the segment. A target
+ *                outside [f_0, f_n-1] fails with INTERP_BELOW/INTERP_ABOVE,
+ *                a segment that does not bracket the target (which only
+ *                happens on a non-monotonic line) with INTERP_NONMONOTONIC.
+ *             1: tolerant mode. If the end nodes bracket the target, a sign
+ *                bisection finds a bracketing segment on any line, monotonic
+ *                or not, and that is the whole search in the normal case.
+ *                Only if the end nodes do not bracket the target, or the
+ *                bisection ends in a non-bracketing segment (both need a
+ *                non-monotonic line), does it fall back to a linear scan for
+ *                the lowest-index bracketing segment, and if none brackets
+ *                the target exactly, to the edge and node tolerances below,
+ *                before INTERP_NOT_ATTAINED.
+ *   valTol    relative roundoff tolerance on the target at the line ends: a
+ *             target within valTol*(1 + |target|) outside [f_0, f_n-1] is
+ *             clamped onto the nearer end instead of failing (both modes).
+ *   edgeTol   tolerant mode only: a target overshooting the first (last)
+ *             node by at most edgeTol times the span of the first (last)
+ *             segment is clamped onto that node.
+ *   nodeTol   tolerant mode only: a target within nodeTol*max(|target|, |f_k|)
+ *             of some node value f_k (roundoff on a plateau) is located at
+ *             that node, lowest index first.
  *
  * The two option sets the EOS libraries use:
  */
 typedef struct interpInvertOpt {
-    int bScan;
+    int bFallback;
     double valTol;
     double edgeTol;
     double nodeTol;
 } INTERPINVERTOPT;
 
-#define INTERP_INVERT_STRICT  { 0, 1e-13, 0.0,  0.0   }   /* scvheos, reos3 */
-#define INTERP_INVERT_SCAN    { 1, 0.0,   1e-4, 1e-12 }   /* ANEOSmaterial */
+#define INTERP_INVERT_STRICT    { 0, 1e-13, 0.0,  0.0   }   /* scvheos, reos3 */
+#define INTERP_INVERT_TOLERANT  { 1, 0.0,   1e-4, 1e-12 }   /* ANEOSmaterial */
 
 /* ---------------------------------------------------------------- access */
 
@@ -392,7 +403,7 @@ static inline int interpScanLine(const INTERPGRID *g, const double *z, int axis,
 }
 
 /*
- * Relaxed fallback of the scan mode once no segment brackets the target:
+ * Relaxed fallback of the tolerant mode once no segment brackets the target:
  * the edge tolerance (clamp onto the first/last node) and the node
  * tolerance (roundoff on a plateau), see INTERPINVERTOPT. Returns 1 and
  * fills k, t on success, 0 otherwise.
@@ -428,7 +439,7 @@ static inline int interpRelaxedLocate(const INTERPGRID *g, const double *z, int 
  * segment (f_k == f_k+1 == target) t = 0, the lower node. When several roots
  * exist the result depends on the path: the bisection returns the root it
  * bisects onto (normally the one in the monotonic bulk of the line), the
- * scan fallback the lowest-index one.
+ * scan fallback of the tolerant mode the lowest-index one.
  *
  * Returns INTERP_SUCCESS with *pk, *pt; INTERP_INVALID for a NaN target.
  */
@@ -455,7 +466,7 @@ static inline int interpInvertLine(const INTERPGRID *g, const double *z, int axi
         if (target > hi_end && target <= hi_end + eps) target = hi_end;
     }
 
-    if (!opt->bScan) {
+    if (!opt->bFallback) {
         /* Strict mode: f increasing in k, bisection on the node index. */
         if (!(target >= g0)) return INTERP_BELOW;
         if (!(target <= g1)) return INTERP_ABOVE;

@@ -259,7 +259,7 @@ static void testInvertRoundTrip(void)
 {
     int failsBefore = nFails;
     static const INTERPINVERTOPT strict = INTERP_INVERT_STRICT;
-    static const INTERPINVERTOPT scan = INTERP_INVERT_SCAN;
+    static const INTERPINVERTOPT tolerant = INTERP_INVERT_TOLERANT;
     int n;
     TEST("interpInvertX/Y round-trip on a monotonic table, both modes");
     for (n = 0; n < 3000; n++) {
@@ -277,15 +277,15 @@ static void testInvertRoundTrip(void)
         /* The returned cell evaluates the table back to the target. */
         CHECK_REL(interpCellValue(&G, zMono, &c2), z, 1e-13, "strict Y cell value");
 
-        /* Along y, scan. */
-        CHECK(interpInvertY(&G, zMono, x, z, 0.0, &scan, &c2, &y2) == INTERP_SUCCESS, "scan Y status");
-        CHECK_REL(y2, y, 1e-12, "scan Y round trip at (%g,%g)", x, y);
+        /* Along y, tolerant. */
+        CHECK(interpInvertY(&G, zMono, x, z, 0.0, &tolerant, &c2, &y2) == INTERP_SUCCESS, "tolerant Y status");
+        CHECK_REL(y2, y, 1e-12, "tolerant Y round trip at (%g,%g)", x, y);
 
         /* Along x, both modes. */
         CHECK(interpInvertX(&G, zMono, y, z, 0.0, &strict, &c2, &x2) == INTERP_SUCCESS, "strict X status");
         CHECK_REL(x2, x, 1e-12, "strict X round trip at (%g,%g)", x, y);
-        CHECK(interpInvertX(&G, zMono, y, z, 0.0, &scan, &c2, &x2) == INTERP_SUCCESS, "scan X status");
-        CHECK_REL(x2, x, 1e-12, "scan X round trip at (%g,%g)", x, y);
+        CHECK(interpInvertX(&G, zMono, y, z, 0.0, &tolerant, &c2, &x2) == INTERP_SUCCESS, "tolerant X status");
+        CHECK_REL(x2, x, 1e-12, "tolerant X round trip at (%g,%g)", x, y);
         /* A second table evaluated in the returned cell agrees with a fresh lookup. */
         interpValue(&G, zBilin, x2, y, 0.0, &z2);
         CHECK_REL(interpCellValue(&G, zBilin, &c2), z2, 1e-12, "second table in returned cell");
@@ -303,8 +303,8 @@ static void testInvertRoundTrip(void)
         CHECK(interpInvertY(&G, zMono, x, zhi * (1 + 1e-15), 0.0, &strict, &c, &y2) == INTERP_SUCCESS && y2 == yAxis[NY-1], "y_max end, roundoff above");
         CHECK(interpInvertY(&G, zMono, x, zlo * 0.5, 0.0, &strict, &c, &y2) == INTERP_BELOW, "below the line");
         CHECK(interpInvertY(&G, zMono, x, zhi * 2.0, 0.0, &strict, &c, &y2) == INTERP_ABOVE, "above the line");
-        CHECK(interpInvertY(&G, zMono, x, zlo * 0.5, 0.0, &scan, &c, &y2) == INTERP_NOT_ATTAINED, "below the line, scan");
-        CHECK(interpInvertY(&G, zMono, x, zhi * 2.0, 0.0, &scan, &c, &y2) == INTERP_NOT_ATTAINED, "above the line, scan");
+        CHECK(interpInvertY(&G, zMono, x, zlo * 0.5, 0.0, &tolerant, &c, &y2) == INTERP_NOT_ATTAINED, "below the line, tolerant");
+        CHECK(interpInvertY(&G, zMono, x, zhi * 2.0, 0.0, &tolerant, &c, &y2) == INTERP_NOT_ATTAINED, "above the line, tolerant");
         CHECK(interpInvertY(&G, zMono, 0.5 * xAxis[0], zlo, 0.0, &strict, &c, &y2) == INTERP_OUTSIDE_XMIN, "x outside");
         CHECK(interpInvertY(&G, zMono, x, NAN, 0.0, &strict, &c, &y2) == INTERP_INVALID, "NaN target");
         /* Outputs untouched on failure. */
@@ -319,7 +319,7 @@ static void testInvertDefects(void)
 {
     int failsBefore = nFails;
     static const INTERPINVERTOPT strict = INTERP_INVERT_STRICT;
-    static const INTERPINVERTOPT scan = INTERP_INVERT_SCAN;
+    static const INTERPINVERTOPT tolerant = INTERP_INVERT_TOLERANT;
     int k = 0; double t = 0.0;
     TEST("inversion on a non-monotonic line and a plateau");
 
@@ -330,19 +330,19 @@ static void testInvertDefects(void)
     CHECK(interpNodeLineMonotonic(&G, zDip, INTERP_ALONG_X, 9) != 0, "dip visible along x at iy = 9");
 
     /* Targets in the dip region are attained three times on the node line
-     * (u = 0 at ix = 10). Scan mode must return a segment that reproduces
+     * (u = 0 at ix = 10). Tolerant mode must return a segment that reproduces
      * the target; strict mode either does so or reports NONMONOTONIC. */
     {
         double zlo = zDip[10 * NY + 10], zhi = zDip[10 * NY + 8];   /* dip bottom .. dip top */
         int m;
         for (m = 1; m < 20; m++) {
             double target = zlo + (zhi - zlo) * m / 20.0;
-            int r = interpInvertLine(&G, zDip, INTERP_ALONG_Y, 10, 0.0, target, &scan, &k, &t);
-            CHECK(r == INTERP_SUCCESS, "scan on dip: status %d", r);
+            int r = interpInvertLine(&G, zDip, INTERP_ALONG_Y, 10, 0.0, target, &tolerant, &k, &t);
+            CHECK(r == INTERP_SUCCESS, "tolerant on dip: status %d", r);
             if (r == INTERP_SUCCESS) {
                 double f = (1 - t) * interpLineValue(&G, zDip, INTERP_ALONG_Y, 10, 0.0, k) + t * interpLineValue(&G, zDip, INTERP_ALONG_Y, 10, 0.0, k + 1);
-                CHECK_REL(f, target, 1e-13, "scan on dip reproduces target");
-                /* The scan convention: lowest-index root unless the sign bisection landed first. */
+                CHECK_REL(f, target, 1e-13, "tolerant on dip reproduces target");
+                /* The fallback convention: lowest-index root unless the sign bisection landed first. */
             }
             r = interpInvertLine(&G, zDip, INTERP_ALONG_Y, 10, 0.0, target, &strict, &k, &t);
             CHECK(r == INTERP_SUCCESS || r == INTERP_NONMONOTONIC, "strict on dip: status %d", r);
@@ -356,7 +356,7 @@ static void testInvertDefects(void)
     {
         double target = 0.5 * (zDip[10 * NY + 15] + zDip[10 * NY + 16]);
         CHECK(interpInvertLine(&G, zDip, INTERP_ALONG_Y, 10, 0.0, target, &strict, &k, &t) == INTERP_SUCCESS && k == 15 && fabs(t - 0.5) < 1e-12, "strict above the dip");
-        CHECK(interpInvertLine(&G, zDip, INTERP_ALONG_Y, 10, 0.0, target, &scan, &k, &t) == INTERP_SUCCESS && k == 15 && fabs(t - 0.5) < 1e-12, "scan above the dip");
+        CHECK(interpInvertLine(&G, zDip, INTERP_ALONG_Y, 10, 0.0, target, &tolerant, &k, &t) == INTERP_SUCCESS && k == 15 && fabs(t - 0.5) < 1e-12, "tolerant above the dip");
     }
 
     /* Plateau in column ix = 20, nodes 5..8. The plateau value is attained on
@@ -367,26 +367,26 @@ static void testInvertDefects(void)
     {
         double zp = zFlat[20 * NY + 5];
         CHECK(interpNodeLineMonotonic(&G, zFlat, INTERP_ALONG_Y, 20) == 6, "plateau reported");
-        CHECK(interpInvertLine(&G, zFlat, INTERP_ALONG_Y, 20, 0.0, zp, &scan, &k, &t) == INTERP_SUCCESS, "scan on plateau");
-        CHECK(interpLineCoord(&G, INTERP_ALONG_Y, k, t) >= yAxis[5] * (1 - 1e-15) && interpLineCoord(&G, INTERP_ALONG_Y, k, t) <= yAxis[8] * (1 + 1e-15), "scan on plateau: k=%d t=%g off the plateau", k, t);
-        CHECK_REL((1 - t) * zFlat[20 * NY + k] + t * zFlat[20 * NY + k + 1], zp, 1e-15, "scan on plateau reproduces target");
+        CHECK(interpInvertLine(&G, zFlat, INTERP_ALONG_Y, 20, 0.0, zp, &tolerant, &k, &t) == INTERP_SUCCESS, "tolerant on plateau");
+        CHECK(interpLineCoord(&G, INTERP_ALONG_Y, k, t) >= yAxis[5] * (1 - 1e-15) && interpLineCoord(&G, INTERP_ALONG_Y, k, t) <= yAxis[8] * (1 + 1e-15), "tolerant on plateau: k=%d t=%g off the plateau", k, t);
+        CHECK_REL((1 - t) * zFlat[20 * NY + k] + t * zFlat[20 * NY + k + 1], zp, 1e-15, "tolerant on plateau reproduces target");
         CHECK(interpInvertLine(&G, zFlat, INTERP_ALONG_Y, 20, 0.0, zp, &strict, &k, &t) == INTERP_SUCCESS, "strict on plateau");
         CHECK(interpLineCoord(&G, INTERP_ALONG_Y, k, t) >= yAxis[5] * (1 - 1e-15) && interpLineCoord(&G, INTERP_ALONG_Y, k, t) <= yAxis[8] * (1 + 1e-15), "strict on plateau: k=%d t=%g off the plateau", k, t);
         CHECK_REL((1 - t) * zFlat[20 * NY + k] + t * zFlat[20 * NY + k + 1], zp, 1e-15, "strict on plateau reproduces target");
         /* Roundoff above the plateau value but below the next node: nodeTol locates it at the plateau. */
-        CHECK(interpInvertLine(&G, zFlat, INTERP_ALONG_Y, 20, 0.0, zp * (1 + 1e-14), &scan, &k, &t) == INTERP_SUCCESS, "plateau + roundoff (scan)");
+        CHECK(interpInvertLine(&G, zFlat, INTERP_ALONG_Y, 20, 0.0, zp * (1 + 1e-14), &tolerant, &k, &t) == INTERP_SUCCESS, "plateau + roundoff (tolerant)");
         CHECK(interpInvertLine(&G, zFlat, INTERP_ALONG_Y, 20, 0.0, zp * (1 + 1e-14), &strict, &k, &t) == INTERP_SUCCESS, "plateau + roundoff (strict)");
     }
 
-    /* Edge tolerance of the scan mode. */
+    /* Edge tolerance of the tolerant mode. */
     {
         double g0 = zMono[3 * NY + 0], g1 = zMono[3 * NY + 1];
         double span = g1 - g0;
-        CHECK(interpInvertLine(&G, zMono, INTERP_ALONG_Y, 3, 0.0, g0 - 0.5 * scan.edgeTol * span, &scan, &k, &t) == INTERP_SUCCESS && k == 0 && t == 0.0, "edge overshoot within tolerance");
-        CHECK(interpInvertLine(&G, zMono, INTERP_ALONG_Y, 3, 0.0, g0 - 2.0 * scan.edgeTol * span, &scan, &k, &t) == INTERP_NOT_ATTAINED, "edge overshoot beyond tolerance");
-        CHECK(interpInvertLine(&G, zMono, INTERP_ALONG_Y, 3, 0.0, g0 - 0.5 * scan.edgeTol * span, &strict, &k, &t) == INTERP_BELOW, "strict has no edge tolerance");
+        CHECK(interpInvertLine(&G, zMono, INTERP_ALONG_Y, 3, 0.0, g0 - 0.5 * tolerant.edgeTol * span, &tolerant, &k, &t) == INTERP_SUCCESS && k == 0 && t == 0.0, "edge overshoot within tolerance");
+        CHECK(interpInvertLine(&G, zMono, INTERP_ALONG_Y, 3, 0.0, g0 - 2.0 * tolerant.edgeTol * span, &tolerant, &k, &t) == INTERP_NOT_ATTAINED, "edge overshoot beyond tolerance");
+        CHECK(interpInvertLine(&G, zMono, INTERP_ALONG_Y, 3, 0.0, g0 - 0.5 * tolerant.edgeTol * span, &strict, &k, &t) == INTERP_BELOW, "strict has no edge tolerance");
         double gn = zMono[3 * NY + NY - 1], gm = zMono[3 * NY + NY - 2];
-        CHECK(interpInvertLine(&G, zMono, INTERP_ALONG_Y, 3, 0.0, gn + 0.5 * scan.edgeTol * (gn - gm), &scan, &k, &t) == INTERP_SUCCESS && k == NY - 2 && t == 1.0, "top edge overshoot within tolerance");
+        CHECK(interpInvertLine(&G, zMono, INTERP_ALONG_Y, 3, 0.0, gn + 0.5 * tolerant.edgeTol * (gn - gm), &tolerant, &k, &t) == INTERP_SUCCESS && k == NY - 2 && t == 1.0, "top edge overshoot within tolerance");
     }
     END_TEST();
 }
