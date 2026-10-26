@@ -597,8 +597,8 @@ int main(int argc, char *argv[])
     if (argc > 1) iMat = atoi(argv[1]);
     if (argc > 3) { dKpcUnit = atof(argv[2]); dMsolUnit = atof(argv[3]); }
 
-    printf("ANEOSmaterial %s test suite: iMat = %d, dKpcUnit = %g, dMsolUnit = %g\n",
-           ANEOS_VERSION_TEXT, iMat, dKpcUnit, dMsolUnit);
+    printf("ANEOSmaterial %s (interpBilinear %s) test suite: iMat = %d, dKpcUnit = %g, dMsolUnit = %g\n",
+           ANEOS_VERSION_TEXT, INTERP_VERSION_TEXT, iMat, dKpcUnit, dMsolUnit);
 
     ANEOSMATERIAL *m = ANEOSinitMaterial(iMat, dKpcUnit, dMsolUnit);
     printf("  table %s: nRho = %d, nT = %d\n", m->matName, m->nRho, m->nT);
