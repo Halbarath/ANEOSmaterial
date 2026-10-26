@@ -440,7 +440,7 @@ static void testIsentrope(ANEOSMATERIAL *m)
             double rho2 = rho1 * (1.0 + dir * 0.05);
             INTERPCELL cell;
             double T2;
-            static const INTERPINVERTOPT opt = INTERP_INVERT_SCAN;
+            static const INTERPINVERTOPT opt = INTERP_INVERT_TOLERANT;
             if (interpInvertY(&m->grid, m->sData, rho2 * m->CodeUnitstoCGSforRho, S1, ANEOS_EDGE_TOL, &opt, &cell, &T2) != INTERP_SUCCESS)
                 continue;                                              /* leaves the table: cold-curve fallback by contract */
             if (!temperatureInvertible(m, rho2, T2)) { nSkipped++; continue; }

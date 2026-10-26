@@ -38,7 +38,7 @@
  *          and T == TAxis[nT-1] are inside) with the roundoff tolerance
  *          ANEOS_EDGE_TOL; the core's status codes are mapped to the ANEOS
  *          contract in ANEOSmaterial.c. Same search strategy and tolerances
- *          as before (INTERP_INVERT_SCAN), nothing else in the numerics changed.
+ *          as before (INTERP_INVERT_TOLERANT), nothing else in the numerics changed.
  */
 #define ANEOS_VERSION_TEXT    "1.0.5"
 #define ANEOS_VERSION_MAJOR   1
@@ -48,7 +48,7 @@
 /* Required version of the interpBilinear core; checked at compile time. */
 #define INTERP_VERSION_MAJOR_REQUIRED 1
 #define INTERP_VERSION_MINOR_REQUIRED 0
-#define INTERP_VERSION_PATCH_REQUIRED 1
+#define INTERP_VERSION_PATCH_REQUIRED 2
 #if (INTERP_VERSION_MAJOR * 10000 + INTERP_VERSION_MINOR * 100 + INTERP_VERSION_PATCH) < \
     (INTERP_VERSION_MAJOR_REQUIRED * 10000 + INTERP_VERSION_MINOR_REQUIRED * 100 + INTERP_VERSION_PATCH_REQUIRED)
 #error "ANEOSmaterial: the vendored interpBilinear is older than the required version"

@@ -29,12 +29,12 @@
 #include "ANEOSmaterial.h"
 
 /*
- * The core's inversion policy for ANEOS tables: scan mode, which copes with
+ * The core's inversion policy for ANEOS tables: tolerant mode, which copes with
  * the non-monotonic u(T) columns of the (M-)ANEOS tables (see
  * INTERPINVERTOPT in interpBilinear.h). The tolerances are the ones the
  * library has always used.
  */
-static const INTERPINVERTOPT ANEOSInvertOpt = INTERP_INVERT_SCAN;
+static const INTERPINVERTOPT ANEOSInvertOpt = INTERP_INVERT_TOLERANT;
 
 /*
  * Initializes ANEOSMATERIAL given the material number iMat
