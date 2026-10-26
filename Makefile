@@ -1,6 +1,6 @@
 objects = aneos.o 
 
-mylibobjects = ANEOSmaterial.o interpBilinear.o
+mylibobjects = ANEOSmaterial.o
 
 # Compile with ANEOS
 #fortran_objects = libaneos.o
