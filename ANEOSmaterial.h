@@ -40,10 +40,10 @@
  *          contract in ANEOSmaterial.c. Same search strategy and tolerances
  *          as before (INTERP_INVERT_TOLERANT), nothing else in the numerics changed.
  */
-#define ANEOS_VERSION_TEXT    "1.0.5"
+#define ANEOS_VERSION_TEXT    "1.1.0"
 #define ANEOS_VERSION_MAJOR   1
-#define ANEOS_VERSION_MINOR   0
-#define ANEOS_VERSION_PATCH   5
+#define ANEOS_VERSION_MINOR   1
+#define ANEOS_VERSION_PATCH   0
 
 /* Required version of the interpBilinear core; checked at compile time. */
 #define INTERP_VERSION_MAJOR_REQUIRED 1
