@@ -27,7 +27,14 @@
 #include <assert.h>
 #include <string.h>
 #include "ANEOSmaterial.h"
-#include "interpBilinear.h"
+
+/*
+ * The core's inversion policy for ANEOS tables: scan mode, which copes with
+ * the non-monotonic u(T) columns of the (M-)ANEOS tables (see
+ * INTERPINVERTOPT in interpBilinear.h). The tolerances are the ones the
+ * library has always used.
+ */
+static const INTERPINVERTOPT ANEOSInvertOpt = INTERP_INVERT_SCAN;
 
 /*
  * Initializes ANEOSMATERIAL given the material number iMat
@@ -191,6 +198,10 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
 
     material->rhoAxis = rhoAxis;
     material->TAxis = TAxis;
+    material->grid.nx = nRho;
+    material->grid.ny = nT;
+    material->grid.x = rhoAxis;
+    material->grid.y = TAxis;
     material->uArray = ANEOSAllocTable(nRho, nT, &material->uData);
     material->pArray = ANEOSAllocTable(nRho, nT, &material->pData);
     material->cArray = ANEOSAllocTable(nRho, nT, &material->cData);
@@ -534,8 +545,10 @@ double ANEOSTofPU(ANEOSMATERIAL *material, double p, double u)
  */
 double ANEOSTofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
-    double T = backwardInterpolateTemperatureBilinear(rho*material->CodeUnitstoCGSforRho,u*material->CodeUnitstoCGSforU,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->uArray);
-    if (T<-1e40)
+    INTERPCELL cell;
+    double T;
+    if (interpInvertY(&material->grid, material->uData, rho*material->CodeUnitstoCGSforRho, u*material->CodeUnitstoCGSforU,
+                      ANEOS_EDGE_TOL, &ANEOSInvertOpt, &cell, &T) != INTERP_SUCCESS)
     {
         /* Fallback, by contract: the lowest tabulated temperature. */
         material->nLookupFail++;
@@ -550,8 +563,14 @@ double ANEOSTofRhoU(ANEOSMATERIAL *material, double rho, double u)
  */
 double ANEOSTofRhoP(ANEOSMATERIAL *material, double rho, double p)
 {
-    double T = backwardInterpolateTemperatureBilinear(rho*material->CodeUnitstoCGSforRho,p*material->CodeUnitstoCGSforP,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->pArray);
-    if (T<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSTofRhoP failed for rho = %.15e, p = %.15e\n", rho, p); }
+    INTERPCELL cell;
+    double T;
+    if (interpInvertY(&material->grid, material->pData, rho*material->CodeUnitstoCGSforRho, p*material->CodeUnitstoCGSforP,
+                      ANEOS_EDGE_TOL, &ANEOSInvertOpt, &cell, &T) != INTERP_SUCCESS) {
+        material->nLookupFail++;
+        ANEOS_WARN("ANEOSTofRhoP failed for rho = %.15e, p = %.15e\n", rho, p);
+        return -1e50;
+    }
     return T;
 }
 
@@ -570,8 +589,12 @@ double ANEOSUofPT(ANEOSMATERIAL *material, double p, double T)
  */
 double ANEOSUofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
-    double u = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->uArray);
-    if (u<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSUofRhoT failed for rho = %.15e, T = %.15e\n", rho, T); return -1e50; }
+    double u;
+    if (interpValue(&material->grid, material->uData, rho*material->CodeUnitstoCGSforRho, T, ANEOS_EDGE_TOL, &u) != INTERP_SUCCESS) {
+        material->nLookupFail++;
+        ANEOS_WARN("ANEOSUofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);
+        return -1e50;
+    }
     return u * material->CGStoCodeUnitsforU;
 }
 
@@ -600,8 +623,12 @@ double ANEOSPofUT(ANEOSMATERIAL *material, double u, double T)
  */
 double ANEOSPofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
-    double p = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->pArray);
-    if (p<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSPofRhoT failed for rho = %.15e, T = %.15e\n", rho, T); return -1e50; }
+    double p;
+    if (interpValue(&material->grid, material->pData, rho*material->CodeUnitstoCGSforRho, T, ANEOS_EDGE_TOL, &p) != INTERP_SUCCESS) {
+        material->nLookupFail++;
+        ANEOS_WARN("ANEOSPofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);
+        return -1e50;
+    }
     return p * material->CGStoCodeUnitsforP;
 }
 
@@ -620,8 +647,14 @@ double ANEOSPofRhoU(ANEOSMATERIAL *material, double rho, double u)
  */
 double ANEOSRhoofUT(ANEOSMATERIAL *material, double u, double T)
 {
-    double rho = backwardInterpolateDensityBilinear(T,u*material->CodeUnitstoCGSforU,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->uArray);
-    if (rho<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSRhoofUT failed for u = %.15e, T = %.15e\n", u, T); return -1e50; }
+    INTERPCELL cell;
+    double rho;
+    if (interpInvertX(&material->grid, material->uData, T, u*material->CodeUnitstoCGSforU,
+                      ANEOS_EDGE_TOL, &ANEOSInvertOpt, &cell, &rho) != INTERP_SUCCESS) {
+        material->nLookupFail++;
+        ANEOS_WARN("ANEOSRhoofUT failed for u = %.15e, T = %.15e\n", u, T);
+        return -1e50;
+    }
     return rho * material->CGStoCodeUnitsforRho;
 }
 
@@ -630,8 +663,14 @@ double ANEOSRhoofUT(ANEOSMATERIAL *material, double u, double T)
  */
 double ANEOSRhoofPT(ANEOSMATERIAL *material, double p, double T)
 {
-    double rho = backwardInterpolateDensityBilinear(T,p*material->CodeUnitstoCGSforP,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->pArray);
-    if (rho<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSRhoofPT failed for p = %.15e, T = %.15e\n", p, T); return -1e50; }
+    INTERPCELL cell;
+    double rho;
+    if (interpInvertX(&material->grid, material->pData, T, p*material->CodeUnitstoCGSforP,
+                      ANEOS_EDGE_TOL, &ANEOSInvertOpt, &cell, &rho) != INTERP_SUCCESS) {
+        material->nLookupFail++;
+        ANEOS_WARN("ANEOSRhoofPT failed for p = %.15e, T = %.15e\n", p, T);
+        return -1e50;
+    }
     return rho * material->CGStoCodeUnitsforRho;
 }
 
@@ -651,20 +690,20 @@ double ANEOSRhoofPT(ANEOSMATERIAL *material, double p, double T)
  */
 static double ANEOSRhoofPUResidual(ANEOSMATERIAL *material, double rho_cgs, double p_cgs, double u_cgs, int *outside)
 {
-    int i, j;
-    double x, y, T;
+    INTERPCELL cell;
+    int i, iret;
+    double x, T;
 
     *outside = 0;
-    if (backwardInterpolateTemperatureCell(rho_cgs, u_cgs, material->nT, material->nRho,
-            material->rhoAxis, material->TAxis, material->uArray, &i, &j, &x, &y, &T) == 0)
-        return interpolateCellBilinear(material->pArray, i, j, x, y) - p_cgs;
+    iret = interpInvertY(&material->grid, material->uData, rho_cgs, u_cgs, ANEOS_EDGE_TOL, &ANEOSInvertOpt, &cell, &T);
+    if (iret == INTERP_SUCCESS)
+        return interpCellValue(&material->grid, material->pData, &cell) - p_cgs;
 
-    if (rho_cgs < material->rhoAxis[0] || rho_cgs >= material->rhoAxis[material->nRho-1]) return -1e50;
-    i = findIndex(rho_cgs, material->rhoAxis, material->nRho);
-    x = (rho_cgs - material->rhoAxis[i]) / (material->rhoAxis[i+1] - material->rhoAxis[i]);
+    /* rho outside the table (or NaN): no state at all. Otherwise u is not attained in this column. */
+    if (interpLocateAxis(material->rhoAxis, material->nRho, rho_cgs, ANEOS_EDGE_TOL, &i, &x) != INTERP_SUCCESS) return -1e50;
     int jn = material->nT - 1;
-    double u0 = (1.0 - x) * material->uArray[i][0]  + x * material->uArray[i+1][0];
-    double un = (1.0 - x) * material->uArray[i][jn] + x * material->uArray[i+1][jn];
+    double u0 = interpLineValue(&material->grid, material->uData, INTERP_ALONG_Y, i, x, 0);
+    double un = interpLineValue(&material->grid, material->uData, INTERP_ALONG_Y, i, x, jn);
     if (u_cgs < u0)      *outside = (material->uArray[i+1][0]  > material->uArray[i][0])  ? +1 : -1;
     else if (u_cgs > un) *outside = (material->uArray[i+1][jn] > material->uArray[i][jn]) ? -2 : +2;
     else return -1e50;
@@ -792,8 +831,12 @@ double ANEOSCofRhoU(ANEOSMATERIAL *material, double rho, double u)
  */
 double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
-    double c = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->cArray);
-    if (c<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSCofRhoT failed for rho = %.15e, T = %.15e\n", rho, T); return -1e50; }
+    double c;
+    if (interpValue(&material->grid, material->cData, rho*material->CodeUnitstoCGSforRho, T, ANEOS_EDGE_TOL, &c) != INTERP_SUCCESS) {
+        material->nLookupFail++;
+        ANEOS_WARN("ANEOSCofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);
+        return -1e50;
+    }
     return c * material->CGStoCodeUnitsforC;
 }
 
@@ -801,12 +844,11 @@ double ANEOSPCTofRhoU(ANEOSMATERIAL *material, double rho, double u, double *c, 
 {
     double rho_cgs = rho * material->CodeUnitstoCGSforRho;
     double u_cgs   = u   * material->CodeUnitstoCGSforU;
-    int i, j;
-    double x, y, Tcell;
+    INTERPCELL cell;
 
     /* rho outside the table: nothing can be evaluated. Same results as the
      * separate calls (TofRhoU fallback, PofRhoT/CofRhoT sentinel). */
-    if (rho_cgs < material->rhoAxis[0] || rho_cgs >= material->rhoAxis[material->nRho-1]) {
+    if (interpLocateAxis(material->rhoAxis, material->nRho, rho_cgs, ANEOS_EDGE_TOL, &cell.ix, &cell.u) != INTERP_SUCCESS) {
         material->nLookupFail++;
         ANEOS_WARN("ANEOSPCTofRhoU: rho = %.15e outside table for u = %.15e\n", rho, u);
         *T = material->TAxis[0];
@@ -814,22 +856,19 @@ double ANEOSPCTofRhoU(ANEOSMATERIAL *material, double rho, double u, double *c, 
         return -1e50;
     }
 
-    if (backwardInterpolateTemperatureCell(rho_cgs, u_cgs, material->nT, material->nRho,
-            material->rhoAxis, material->TAxis, material->uArray, &i, &j, &x, &y, &Tcell) != 0) {
-        /* Fallback, by contract: the lowest tabulated temperature, i.e. cell j = 0, y = 0. */
+    if (interpInvertLine(&material->grid, material->uData, INTERP_ALONG_Y, cell.ix, cell.u, u_cgs,
+                         &ANEOSInvertOpt, &cell.iy, &cell.v) != INTERP_SUCCESS) {
+        /* Fallback, by contract: the lowest tabulated temperature, i.e. cell iy = 0, v = 0. */
         material->nLookupFail++;
         ANEOS_WARN("ANEOSPCTofRhoU: T(rho,u) failed for rho = %.15e, u = %.15e, falling back to T = %.15e\n",
                    rho, u, material->TAxis[0]);
-        i = findIndex(rho_cgs, material->rhoAxis, material->nRho);
-        x = (rho_cgs - material->rhoAxis[i]) / (material->rhoAxis[i+1] - material->rhoAxis[i]);
-        j = 0;
-        y = 0.0;
-        Tcell = material->TAxis[0];
+        cell.iy = 0;
+        cell.v = 0.0;
     }
 
-    *T = Tcell;
-    *c = interpolateCellBilinear(material->cArray, i, j, x, y) * material->CGStoCodeUnitsforC;
-    return interpolateCellBilinear(material->pArray, i, j, x, y) * material->CGStoCodeUnitsforP;
+    *T = interpLineCoord(&material->grid, INTERP_ALONG_Y, cell.iy, cell.v);
+    *c = interpCellValue(&material->grid, material->cData, &cell) * material->CGStoCodeUnitsforC;
+    return interpCellValue(&material->grid, material->pData, &cell) * material->CGStoCodeUnitsforP;
 }
 
 /*
@@ -856,8 +895,8 @@ int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T)
         return -1;
     }
 
-    int phase = interpolateValueNearest(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->PhaseArray);
-    if (phase < 0) {
+    int phase;
+    if (interpNearest(&material->grid, material->phaseData, rho*material->CodeUnitstoCGSforRho, T, ANEOS_EDGE_TOL, &phase) != INTERP_SUCCESS) {
         material->nLookupFail++;
         ANEOS_WARN("ANEOSPhaseofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);
         return -1;
@@ -876,16 +915,16 @@ int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T)
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2)
 {
     double oldT = ANEOSTofRhoU(material,rho1,u1);
-    double oldS = interpolateValueBilinear(rho1*material->CodeUnitstoCGSforRho, oldT, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->sArray);
-    double newT;
+    double oldS, newT;
+    INTERPCELL cell;
 
-    if (oldS<-1e40) {
+    if (interpValue(&material->grid, material->sData, rho1*material->CodeUnitstoCGSforRho, oldT, ANEOS_EDGE_TOL, &oldS) != INTERP_SUCCESS) {
         material->nLookupFail++;
         ANEOS_WARN("ANEOSisentropicU oldS failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e, using cold curve at rho2\n", rho1, u1, rho2);
         newT = material->TAxis[0];
     } else {
-        newT = backwardInterpolateTemperatureBilinear(rho2*material->CodeUnitstoCGSforRho,oldS,material->nT,material->nRho,material->rhoAxis,material->TAxis,material->sArray);
-        if (newT<-1e40) {
+        if (interpInvertY(&material->grid, material->sData, rho2*material->CodeUnitstoCGSforRho, oldS,
+                          ANEOS_EDGE_TOL, &ANEOSInvertOpt, &cell, &newT) != INTERP_SUCCESS) {
             material->nLookupFail++;
             ANEOS_WARN("ANEOSisentropicU newT failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e, using cold curve at rho2\n", rho1, u1, rho2);
             newT = material->TAxis[0];
@@ -912,8 +951,12 @@ double ANEOSSofRhoU(ANEOSMATERIAL *material, double rho, double u)
  */
 double ANEOSSofRhoT(ANEOSMATERIAL *material, double rho, double T)
 {
-    double S = interpolateValueBilinear(rho*material->CodeUnitstoCGSforRho, T, material->nT, material->nRho, material->rhoAxis, material->TAxis, material->sArray);
-    if (S<-1e40) { material->nLookupFail++; ANEOS_WARN("ANEOSSofRhoT failed for rho = %.15e, T = %.15e\n", rho, T); }
+    double S;
+    if (interpValue(&material->grid, material->sData, rho*material->CodeUnitstoCGSforRho, T, ANEOS_EDGE_TOL, &S) != INTERP_SUCCESS) {
+        material->nLookupFail++;
+        ANEOS_WARN("ANEOSSofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);
+        return -1e50;
+    }
     return S;
 }
 
@@ -936,19 +979,21 @@ double ANEOSTmeltofRho(ANEOSMATERIAL *material, double rho)
     double rho_cgs = rho * material->CodeUnitstoCGSforRho;
     if (!(rho_cgs > 0.0) || !isfinite(rho_cgs)) return -1.0;
 
-    /* Clamp to the tabulated range (upper bound is exclusive in the interpolator). */
+    /* Clamp to the tabulated range. */
     double rhoMin = material->rhoAxis[0];
     double rhoMax = material->rhoAxis[material->nRho-1];
     if (rho_cgs <= rhoMin) return material->T_melt[0];
     if (rho_cgs >= rhoMax) return material->T_melt[material->nRho-1];
 
-    double T = interpolateValueLinear(rho_cgs, material->nRho, material->rhoAxis, material->T_melt);
-    if (T < -1e40) {
+    /* Linear interpolation along the rho axis; rho is inside the axis after the clamp. */
+    int i;
+    double x;
+    if (interpLocateAxis(material->rhoAxis, material->nRho, rho_cgs, 0.0, &i, &x) != INTERP_SUCCESS) {
         /* Cannot happen after the clamp, but keep the contract explicit. */
         fprintf(stderr, "ANEOSTmeltofRho: interpolation failed for rho = %.15e\n", rho);
         return -1.0;
     }
-    return T;
+    return material->T_melt[i] + x * (material->T_melt[i+1] - material->T_melt[i]);
 }
 
 /*
@@ -963,11 +1008,9 @@ static int ANEOSPartialsCGS(ANEOSMATERIAL *material, double rho, double T,
     double rho_cgs = rho * material->CodeUnitstoCGSforRho;
     int iret = 0;
 
-    iret |= interpolateGradientBilinear(rho_cgs, T, material->nT, material->nRho,
-            material->rhoAxis, material->TAxis, material->pArray, dPdrho_T, dPdT_rho);
+    iret |= interpGradient(&material->grid, material->pData, rho_cgs, T, ANEOS_EDGE_TOL, dPdrho_T, dPdT_rho);
     if (dudrho_T && dudT_rho) {
-        iret |= interpolateGradientBilinear(rho_cgs, T, material->nT, material->nRho,
-                material->rhoAxis, material->TAxis, material->uArray, dudrho_T, dudT_rho);
+        iret |= interpGradient(&material->grid, material->uData, rho_cgs, T, ANEOS_EDGE_TOL, dudrho_T, dudT_rho);
     }
     if (iret) {
         material->nLookupFail++;

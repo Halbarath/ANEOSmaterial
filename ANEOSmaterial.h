@@ -24,6 +24,7 @@
 #ifndef ANEOSMATERIAL_HINCLUDED
 #define ANEOSMATERIAL_HINCLUDED
 #include <stdio.h>
+#include "interpBilinear/interpBilinear.h"   /* git subtree of the interpBilinear repository */
 
 /*
  * Version history
@@ -31,11 +32,35 @@
  *          artefacts and keeps scanning past them; fused ANEOSPCTofRhoU;
  *          failure sentinel is exactly -1e50 in every unit system;
  *          interpolateValueNearest rejects NaN instead of aborting.
+ *   1.0.5  interpolation through the header-only interpBilinear core (git
+ *          subtree in interpBilinear/, replaces interpBilinear.c/.h); the
+ *          table intervals are closed at the upper edge (rho == rhoAxis[nRho-1]
+ *          and T == TAxis[nT-1] are inside) with the roundoff tolerance
+ *          ANEOS_EDGE_TOL; the core's status codes are mapped to the ANEOS
+ *          contract in ANEOSmaterial.c. Same search strategy and tolerances
+ *          as before (INTERP_INVERT_SCAN), nothing else in the numerics changed.
  */
-#define ANEOS_VERSION_TEXT    "1.0.4"
+#define ANEOS_VERSION_TEXT    "1.0.5"
 #define ANEOS_VERSION_MAJOR   1
 #define ANEOS_VERSION_MINOR   0
-#define ANEOS_VERSION_PATCH   4
+#define ANEOS_VERSION_PATCH   5
+
+/* Required version of the interpBilinear core; checked at compile time. */
+#define INTERP_VERSION_MAJOR_REQUIRED 1
+#define INTERP_VERSION_MINOR_REQUIRED 0
+#define INTERP_VERSION_PATCH_REQUIRED 1
+#if (INTERP_VERSION_MAJOR * 10000 + INTERP_VERSION_MINOR * 100 + INTERP_VERSION_PATCH) < \
+    (INTERP_VERSION_MAJOR_REQUIRED * 10000 + INTERP_VERSION_MINOR_REQUIRED * 100 + INTERP_VERSION_PATCH_REQUIRED)
+#error "ANEOSmaterial: the vendored interpBilinear is older than the required version"
+#endif
+
+/*
+ * Relative roundoff tolerance at the table edges: a (rho, T) within
+ * ANEOS_EDGE_TOL*(1 + |x|) outside an axis is clamped onto it instead of
+ * being rejected, so that a state on the edge survives the code <-> cgs
+ * unit round trip. Far below any physical scale.
+ */
+#define ANEOS_EDGE_TOL 1e-13
 
 #define MAT_ANEOS_ICE         52
 #define MAT_ANEOS_DUNITE      54
@@ -51,8 +76,8 @@
 #define ANEOS_N_MATERIAL_MAX 100
 
 /*
- * Diagnostics. Lookup failures (rho or T outside the table, failed inversion)
- * are counted here and reported to stderr only if EOSLIB_VERBOSE is defined.
+ * Diagnostics. Lookup failures (rho or T outside the closed table intervals,
+ * failed inversion) are counted here and reported to stderr only if EOSLIB_VERBOSE is defined.
  * On failure ANEOSTofRhoU falls back to TAxis[0]; every other function
  * returning a double returns exactly -1e50, in any unit system, so callers
  * can test for (value < -1e40) regardless of the unit conversion. The phase
@@ -93,6 +118,7 @@ typedef struct ANEOSmaterial
      */
     double *rhoAxis;
     double *TAxis;
+    INTERPGRID grid;   /* {nRho, nT, rhoAxis, TAxis}: the view the interpBilinear core works on */
     double *uData, *pData, *cData, *sData;
     double **uArray;
     double **pArray;

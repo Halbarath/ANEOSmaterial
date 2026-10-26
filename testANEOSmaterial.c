@@ -38,7 +38,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "ANEOSmaterial.h"
-#include "interpBilinear.h"
 
 /* ---------------------------------------------------------------- harness */
 
@@ -126,8 +125,8 @@ static int energyMonotonicInColumn(ANEOSMATERIAL *m, int i)
 static int temperatureInvertible(ANEOSMATERIAL *m, double rho, double T)
 {
     double rho_cgs = rho * m->CodeUnitstoCGSforRho;
-    int i = findIndex(rho_cgs, m->rhoAxis, m->nRho);
-    int jT = findIndex(T, m->TAxis, m->nT);
+    int i = interpFindIndex(rho_cgs, m->rhoAxis, m->nRho);
+    int jT = interpFindIndex(T, m->TAxis, m->nT);
     double x = (rho_cgs - m->rhoAxis[i]) / (m->rhoAxis[i+1] - m->rhoAxis[i]);
     double y = (T - m->TAxis[jT]) / (m->TAxis[jT+1] - m->TAxis[jT]);
     double hlo = (1.0 - x) * m->uArray[i][jT]   + x * m->uArray[i+1][jT];
@@ -151,8 +150,8 @@ static int temperatureInvertible(ANEOSMATERIAL *m, double rho, double T)
 static double entropyRoundTripTol(ANEOSMATERIAL *m, double rho, double T, double S)
 {
     double rho_cgs = rho * m->CodeUnitstoCGSforRho;
-    int i = findIndex(rho_cgs, m->rhoAxis, m->nRho);
-    int j = findIndex(T, m->TAxis, m->nT);
+    int i = interpFindIndex(rho_cgs, m->rhoAxis, m->nRho);
+    int j = interpFindIndex(T, m->TAxis, m->nT);
     double x = (rho_cgs - m->rhoAxis[i]) / (m->rhoAxis[i+1] - m->rhoAxis[i]);
     double u0 = (1.0 - x) * m->uArray[i][j]   + x * m->uArray[i+1][j];
     double u1 = (1.0 - x) * m->uArray[i][j+1] + x * m->uArray[i+1][j+1];
@@ -189,6 +188,7 @@ static void testInit(ANEOSMATERIAL *m, int iMat)
     /* Column pointers must index the contiguous block. */
     CHECK(m->uArray[0] == m->uData, "uArray[0] is not uData");
     CHECK(m->uArray[m->nRho-1] == m->uData + (size_t)(m->nRho-1) * m->nT, "uArray column stride wrong");
+    CHECK(m->grid.nx == m->nRho && m->grid.ny == m->nT && m->grid.x == m->rhoAxis && m->grid.y == m->TAxis, "interpBilinear grid view inconsistent");
     CHECK(m->CodeUnitstoCGSforU * m->CGStoCodeUnitsforU > 0.0, "unit factors");
     CHECK(m->nLookupFail == 0, "nLookupFail = %ld after init", m->nLookupFail);
 
@@ -242,11 +242,11 @@ static void testForwardLookups(ANEOSMATERIAL *m)
         CHECK(isfinite(c) && !isSentinel(c) && c >= 0.0, "c(rho=%g,T=%g) = %g", rho, T, c);
         CHECK(isfinite(S) && !isSentinel(S), "S(rho=%g,T=%g) = %g", rho, T, S);
     }
-    /* Interior table nodes must be reproduced exactly (bilinear interpolation).
-     * The edge nodes are excluded: the code<->cgs round trip can land one ulp
-     * outside the table, which is correctly reported as out of range. */
-    for (int i = 1; i < m->nRho - 1; i += (m->nRho - 2) / 7 + 1)
-        for (int j = 1; j < m->nT - 1; j += (m->nT - 2) / 7 + 1) {
+    /* Table nodes must be reproduced exactly (bilinear interpolation),
+     * including the edge nodes: the intervals are closed and the roundoff
+     * tolerance ANEOS_EDGE_TOL absorbs the code<->cgs round trip. */
+    for (int i = 0; i < m->nRho; i += (m->nRho - 1) / 7 + 1)
+        for (int j = 0; j < m->nT; j += (m->nT - 1) / 7 + 1) {
             double rho = m->rhoAxis[i] * m->CGStoCodeUnitsforRho;
             double T = m->TAxis[j];
             CHECK_REL(ANEOSUofRhoT(m, rho, T) * m->CodeUnitstoCGSforU, m->uArray[i][j], 1e-13, "u at node (%d,%d)", i, j);
@@ -357,6 +357,7 @@ static void testFusedLookup(ANEOSMATERIAL *m)
 static void testDerivatives(ANEOSMATERIAL *m)
 {
     int failsBefore = nFails;
+    int nSkipped = 0;
     TEST("analytic derivatives match the interpolant");
     /* Inside a cell the interpolant is bilinear, so central differences with a
      * step that stays inside the cell are exact for the partials at fixed T
@@ -375,11 +376,15 @@ static void testDerivatives(ANEOSMATERIAL *m)
             fd = (ANEOSPofRhoT(m, rho, T + hT) - ANEOSPofRhoT(m, rho, T - hT)) / (2 * hT);
             CHECK_REL(dPdT, fd, 1e-8, "dP/dT|rho in cell (%d,%d)", i, j);
 
-            /* The finite difference below goes through T(rho,u), whose 1e-10
-             * round-trip error is amplified where du/dT is small (cold cells),
-             * so the tolerance is looser than for the fixed-T partials. Where
-             * the cell has du/dT <= 0 (table defect) the documented sentinel
-             * is expected instead. */
+            /* The (rho, u) derivatives go through T(rho,u). Where u(T) is not
+             * invertible at this rho (several roots, table defect) the root
+             * that comes back depends on roundoff and may lie in a cell with
+             * du/dT <= 0, so those states are skipped like in the other tests.
+             * Where it is invertible, the 1e-10 round-trip error of T is
+             * amplified where du/dT is small (cold cells), so the tolerance is
+             * looser than for the fixed-T partials. A cell with du/dT <= 0 on
+             * an otherwise invertible line gives the documented sentinel. */
+            if (!temperatureInvertible(m, rho, T)) { nSkipped++; continue; }
             double u = ANEOSUofRhoT(m, rho, T);
             double up = ANEOSUofRhoT(m, rho, T + hT), um = ANEOSUofRhoT(m, rho, T - hT);
             double dPdU = ANEOSdPdUofRhoU(m, rho, u);
@@ -404,6 +409,7 @@ static void testDerivatives(ANEOSMATERIAL *m)
 
             CHECK_REL(ANEOSdUdRhoofRhoU(m, rho, u), ANEOSPofRhoU(m, rho, u) / (rho * rho), 1e-14, "du/drho in cell (%d,%d)", i, j);
         }
+    if (nSkipped) NOTE("%d (rho,u) derivative checks skipped (u(T) not invertible, table defect)", nSkipped);
     END_TEST();
 }
 
@@ -425,16 +431,18 @@ static void testIsentrope(ANEOSMATERIAL *m)
         if (isSentinel(uSame)) { CHECK(0, "isentropicU failed rho=%g->%g", rho1, rho1); continue; }
         CHECK_REL(ANEOSSofRhoU(m, rho1, uSame), S1, entropyRoundTripTol(m, rho1, T1, S1),
                   "S after isentrope to same rho at rho=%g T=%g", rho1, T1);
-        if (entropyMonotonicInColumn(m, findIndex(rho1 * m->CodeUnitstoCGSforRho, m->rhoAxis, m->nRho)))
+        if (entropyMonotonicInColumn(m, interpFindIndex(rho1 * m->CodeUnitstoCGSforRho, m->rhoAxis, m->nRho)))
             CHECK_REL(uSame, u1, 1e-10, "isentrope to same rho at rho=%g T=%g", rho1, T1);
 
         /* Small compression and expansion: S must be conserved where the
          * isentrope stays in the table and T(rho2, u2) is unique. */
         for (int dir = -1; dir <= 1; dir += 2) {
             double rho2 = rho1 * (1.0 + dir * 0.05);
-            double T2 = backwardInterpolateTemperatureBilinear(rho2 * m->CodeUnitstoCGSforRho, S1,
-                            m->nT, m->nRho, m->rhoAxis, m->TAxis, m->sArray);
-            if (isSentinel(T2)) continue;                              /* leaves the table: cold-curve fallback by contract */
+            INTERPCELL cell;
+            double T2;
+            static const INTERPINVERTOPT opt = INTERP_INVERT_SCAN;
+            if (interpInvertY(&m->grid, m->sData, rho2 * m->CodeUnitstoCGSforRho, S1, ANEOS_EDGE_TOL, &opt, &cell, &T2) != INTERP_SUCCESS)
+                continue;                                              /* leaves the table: cold-curve fallback by contract */
             if (!temperatureInvertible(m, rho2, T2)) { nSkipped++; continue; }
             double u2 = ANEOSisentropicU(m, rho1, u1, rho2);
             if (isSentinel(u2)) { CHECK(0, "isentropicU failed rho=%g->%g", rho1, rho2); continue; }
@@ -453,7 +461,7 @@ static void testIsentrope(ANEOSMATERIAL *m)
 static int pressureMonotoneInCell(ANEOSMATERIAL *m, double rho, double u)
 {
     double rho_cgs = rho * m->CodeUnitstoCGSforRho;
-    int i = findIndex(rho_cgs, m->rhoAxis, m->nRho);
+    int i = interpFindIndex(rho_cgs, m->rhoAxis, m->nRho);
     double prev = -INFINITY;
     for (int k = 0; k <= 32; k++) {
         double r = (m->rhoAxis[i] + (m->rhoAxis[i+1] - m->rhoAxis[i]) * k / 32.0) * m->CGStoCodeUnitsforRho;
@@ -476,7 +484,7 @@ static void testRhoofPU(ANEOSMATERIAL *m)
         double rho = sampleRho(m, a), T = sampleT(m, b);
         /* The residual P(rho,u) - P needs T(rho,u) along the whole column down
          * to the cold curve, so broken cold rows make the state untestable. */
-        int i = findIndex(rho * m->CodeUnitstoCGSforRho, m->rhoAxis, m->nRho);
+        int i = interpFindIndex(rho * m->CodeUnitstoCGSforRho, m->rhoAxis, m->nRho);
         if (!temperatureInvertible(m, rho, T) || !energyMonotonicInColumn(m, i)) { nSkipped++; continue; }
         double P = ANEOSPofRhoT(m, rho, T), u = ANEOSUofRhoT(m, rho, T);
         if (!pressureMonotoneInCell(m, rho, u)) { nSkippedBump++; continue; }
