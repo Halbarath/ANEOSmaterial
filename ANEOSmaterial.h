@@ -39,10 +39,14 @@
  *          ANEOS_EDGE_TOL; the core's status codes are mapped to the ANEOS
  *          contract in ANEOSmaterial.c. Same search strategy and tolerances
  *          as before (INTERP_INVERT_TOLERANT), nothing else in the numerics changed.
+ *   1.2.0  EOSlib failure contract spelled out: ANEOS_FAIL_VALUE and
+ *          ANEOSFailed() replace the literal -1e50, ANEOS_SUCCESS/ANEOS_FAIL
+ *          status codes; ANEOSTmeltofRho returns the sentinel for an
+ *          invalid rho (a missing melt curve is fatal). Numerics unchanged.
  */
-#define ANEOS_VERSION_TEXT    "1.1.0"
+#define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1
-#define ANEOS_VERSION_MINOR   1
+#define ANEOS_VERSION_MINOR   2
 #define ANEOS_VERSION_PATCH   0
 
 /* Required version of the interpBilinear core; checked at compile time. */
@@ -76,17 +80,44 @@
 #define ANEOS_N_MATERIAL_MAX 100
 
 /*
- * Diagnostics. Lookup failures (rho or T outside the closed table intervals,
- * failed inversion) are counted here and reported to stderr only if EOSLIB_VERBOSE is defined.
- * On failure ANEOSTofRhoU falls back to TAxis[0]; every other function
- * returning a double returns exactly -1e50, in any unit system, so callers
- * can test for (value < -1e40) regardless of the unit conversion. The phase
- * lookups return -1 and ANEOSTmeltofRho returns -1.0 (see below).
+ * Status codes (EOSlib convention: 0 is success, -99 a generic failure;
+ * the ANEOSRead* functions return 1 for an optional file that is absent).
+ */
+#define ANEOS_SUCCESS 0
+#define ANEOS_FAIL  -99
+
+/*
+ * Failure contract (the EOSlib convention, shared by all EOS libraries).
+ *
+ * A failed lookup never exits. Every function returning a double returns
+ * exactly ANEOS_FAIL_VALUE, in any unit system, when rho or T is outside the
+ * closed table intervals or an inversion fails; ANEOSPCTofRhoU sets *c and
+ * *T as well. The one exception is T(rho, u) at a valid rho: if u cannot be
+ * inverted (below the cold curve, above the top row, not finite) T falls
+ * back to TAxis[0], the lowest tabulated temperature, and all (rho, u)
+ * functions then evaluate at (rho, T_min). The phase lookups return -1.
+ *
+ * Every failure and every fallback is counted in nLookupFail and reported
+ * on stderr only when the library is compiled with -DEOSLIB_VERBOSE
+ * (ANEOS_WARN). Test a returned value with ANEOSFailed(x) (true for the
+ * sentinel and for NaN); EOSlib exposes the same test as EOSFailed().
+ * Errors during initialisation (missing or defective table, unknown
+ * material) and a missing melt curve in ANEOSTmeltofRho are fatal.
+ */
+#define ANEOS_FAIL_VALUE (-1e50)
+
+static inline int ANEOSFailed(double x) {
+    return !(x > -1e40);
+}
+
+/*
+ * Diagnostic messages of the lookups, only with -DEOSLIB_VERBOSE. The
+ * silent variant still type-checks the arguments but compiles to nothing.
  */
 #ifdef EOSLIB_VERBOSE
 #define ANEOS_WARN(...) fprintf(stderr, __VA_ARGS__)
 #else
-#define ANEOS_WARN(...) ((void)0)
+#define ANEOS_WARN(...) do { if (0) fprintf(stderr, __VA_ARGS__); } while (0)
 #endif
 
 typedef struct ANEOSmaterial

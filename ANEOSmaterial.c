@@ -96,7 +96,7 @@ static void ANEOSReadOrDie(void *ptr, size_t size, size_t n, FILE *file, const c
         fprintf(stderr, "ANEOSmaterial: failed to read %s from file %s (got %zu of %zu items)\n",
                 what, inputfile, nRead, n);
         assert(0);
-        exit(1);   /* in case NDEBUG is set */
+        exit(1);
     }
 }
 
@@ -289,6 +289,7 @@ int ANEOSReadExtendedTable(ANEOSMATERIAL *material, char *inputfile)
     if (material == NULL) {
         fprintf(stderr, "ANEOSReadExtendedTable: ANEOSmaterial not initialized.\n");
         assert(0);
+        exit(1);
     }
 
     if ((file= fopen(inputfile, "rb")) == NULL)
@@ -369,6 +370,7 @@ int ANEOSReadMeltCurve(ANEOSMATERIAL *material, char *inputfile)
     if (material == NULL) {
         fprintf(stderr, "ANEOSReadMeltCurve: ANEOSmaterial not initialized.\n");
         assert(0);
+        exit(1);
     }
 
     if ((file= fopen(inputfile, "rb")) == NULL)
@@ -425,6 +427,7 @@ int ANEOSReadStrengthParameters(ANEOSMATERIAL *material, char *inputfile)
     if (material == NULL) {
         fprintf(stderr, "ANEOSReadStrengthParameters: ANEOSmaterial not initialized.\n");
         assert(0);
+        exit(1);
     }
 
     if ((file = fopen(inputfile, "r")) == NULL)
@@ -536,7 +539,7 @@ double ANEOSgetRho0(ANEOSMATERIAL *material)
 double ANEOSTofPU(ANEOSMATERIAL *material, double p, double u)
 {
     double rho = ANEOSRhoofPU(material, p, u);
-    if (rho < -1e40) return -1e50;
+    if (ANEOSFailed(rho)) return ANEOS_FAIL_VALUE;
     return ANEOSTofRhoU(material, rho, u);
 }
 
@@ -569,7 +572,7 @@ double ANEOSTofRhoP(ANEOSMATERIAL *material, double rho, double p)
                       ANEOS_EDGE_TOL, &ANEOSInvertOpt, &cell, &T) != INTERP_SUCCESS) {
         material->nLookupFail++;
         ANEOS_WARN("ANEOSTofRhoP failed for rho = %.15e, p = %.15e\n", rho, p);
-        return -1e50;
+        return ANEOS_FAIL_VALUE;
     }
     return T;
 }
@@ -593,7 +596,7 @@ double ANEOSUofRhoT(ANEOSMATERIAL *material, double rho, double T)
     if (interpValue(&material->grid, material->uData, rho*material->CodeUnitstoCGSforRho, T, ANEOS_EDGE_TOL, &u) != INTERP_SUCCESS) {
         material->nLookupFail++;
         ANEOS_WARN("ANEOSUofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);
-        return -1e50;
+        return ANEOS_FAIL_VALUE;
     }
     return u * material->CGStoCodeUnitsforU;
 }
@@ -627,7 +630,7 @@ double ANEOSPofRhoT(ANEOSMATERIAL *material, double rho, double T)
     if (interpValue(&material->grid, material->pData, rho*material->CodeUnitstoCGSforRho, T, ANEOS_EDGE_TOL, &p) != INTERP_SUCCESS) {
         material->nLookupFail++;
         ANEOS_WARN("ANEOSPofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);
-        return -1e50;
+        return ANEOS_FAIL_VALUE;
     }
     return p * material->CGStoCodeUnitsforP;
 }
@@ -653,7 +656,7 @@ double ANEOSRhoofUT(ANEOSMATERIAL *material, double u, double T)
                       ANEOS_EDGE_TOL, &ANEOSInvertOpt, &cell, &rho) != INTERP_SUCCESS) {
         material->nLookupFail++;
         ANEOS_WARN("ANEOSRhoofUT failed for u = %.15e, T = %.15e\n", u, T);
-        return -1e50;
+        return ANEOS_FAIL_VALUE;
     }
     return rho * material->CGStoCodeUnitsforRho;
 }
@@ -669,7 +672,7 @@ double ANEOSRhoofPT(ANEOSMATERIAL *material, double p, double T)
                       ANEOS_EDGE_TOL, &ANEOSInvertOpt, &cell, &rho) != INTERP_SUCCESS) {
         material->nLookupFail++;
         ANEOS_WARN("ANEOSRhoofPT failed for p = %.15e, T = %.15e\n", p, T);
-        return -1e50;
+        return ANEOS_FAIL_VALUE;
     }
     return rho * material->CGStoCodeUnitsforRho;
 }
@@ -700,13 +703,13 @@ static double ANEOSRhoofPUResidual(ANEOSMATERIAL *material, double rho_cgs, doub
         return interpCellValue(&material->grid, material->pData, &cell) - p_cgs;
 
     /* rho outside the table (or NaN): no state at all. Otherwise u is not attained in this column. */
-    if (interpLocateAxis(material->rhoAxis, material->nRho, rho_cgs, ANEOS_EDGE_TOL, &i, &x) != INTERP_SUCCESS) return -1e50;
+    if (interpLocateAxis(material->rhoAxis, material->nRho, rho_cgs, ANEOS_EDGE_TOL, &i, &x) != INTERP_SUCCESS) return ANEOS_FAIL_VALUE;
     int jn = material->nT - 1;
     double u0 = interpLineValue(&material->grid, material->uData, INTERP_ALONG_Y, i, x, 0);
     double un = interpLineValue(&material->grid, material->uData, INTERP_ALONG_Y, i, x, jn);
     if (u_cgs < u0)      *outside = (material->uArray[i+1][0]  > material->uArray[i][0])  ? +1 : -1;
     else if (u_cgs > un) *outside = (material->uArray[i+1][jn] > material->uArray[i][jn]) ? -2 : +2;
-    else return -1e50;
+    else return ANEOS_FAIL_VALUE;
     return 0.0;
 }
 
@@ -734,7 +737,7 @@ static int ANEOSRhoofPURefine(ANEOSMATERIAL *material, double p_cgs, double u_cg
         int out;
         double c = 0.5 * (a + b);
         double gc = ANEOSRhoofPUResidual(material, c, p_cgs, u_cgs, &out);
-        if (gc < -1e40) return -1;
+        if (ANEOSFailed(gc)) return -1;
         if (out == 0 && gc == 0.0) { *prho = c; return 1; }
         if (out == 0 && !haveRef) { g0 = gc; haveRef = 1; }
         int neg = out ? (out < 0) : (gc < 0.0);
@@ -805,7 +808,7 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
                     ANEOS_WARN("ANEOSRhoofPU: residual undefined between rho = %.15e and %.15e for p = %.15e, u = %.15e\n",
                                material->rhoAxis[iprev] * material->CGStoCodeUnitsforRho,
                                material->rhoAxis[i] * material->CGStoCodeUnitsforRho, p, u);
-                    return -1e50;
+                    return ANEOS_FAIL_VALUE;
                 }
             }
         }
@@ -813,7 +816,7 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
     }
     material->nLookupFail++;
     ANEOS_WARN("ANEOSRhoofPU: no root found for p = %.15e, u = %.15e\n", p, u);
-    return -1e50;
+    return ANEOS_FAIL_VALUE;
 }
 
 /*
@@ -835,7 +838,7 @@ double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T)
     if (interpValue(&material->grid, material->cData, rho*material->CodeUnitstoCGSforRho, T, ANEOS_EDGE_TOL, &c) != INTERP_SUCCESS) {
         material->nLookupFail++;
         ANEOS_WARN("ANEOSCofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);
-        return -1e50;
+        return ANEOS_FAIL_VALUE;
     }
     return c * material->CGStoCodeUnitsforC;
 }
@@ -852,8 +855,8 @@ double ANEOSPCTofRhoU(ANEOSMATERIAL *material, double rho, double u, double *c, 
         material->nLookupFail++;
         ANEOS_WARN("ANEOSPCTofRhoU: rho = %.15e outside table for u = %.15e\n", rho, u);
         *T = material->TAxis[0];
-        *c = -1e50;
-        return -1e50;
+        *c = ANEOS_FAIL_VALUE;
+        return ANEOS_FAIL_VALUE;
     }
 
     if (interpInvertLine(&material->grid, material->uData, INTERP_ALONG_Y, cell.ix, cell.u, u_cgs,
@@ -955,7 +958,7 @@ double ANEOSSofRhoT(ANEOSMATERIAL *material, double rho, double T)
     if (interpValue(&material->grid, material->sData, rho*material->CodeUnitstoCGSforRho, T, ANEOS_EDGE_TOL, &S) != INTERP_SUCCESS) {
         material->nLookupFail++;
         ANEOS_WARN("ANEOSSofRhoT failed for rho = %.15e, T = %.15e\n", rho, T);
-        return -1e50;
+        return ANEOS_FAIL_VALUE;
     }
     return S;
 }
@@ -967,17 +970,24 @@ double ANEOSSofRhoT(ANEOSMATERIAL *material, double rho, double T)
  * nearest edge value (conservative for the strength model: T_melt increases
  * with compression, so clamping above the table underestimates it).
  *
- * Returns -1.0 if the melt curve was not loaded or rho is not a valid density.
+ * A missing melt curve is a configuration error (a strength model was
+ * requested without its melt curve) and fatal. Returns ANEOS_FAIL_VALUE
+ * (counted in nLookupFail) if rho is not a valid density.
  */
 double ANEOSTmeltofRho(ANEOSMATERIAL *material, double rho)
 {
     if (material->T_melt == NULL) {
         fprintf(stderr, "ANEOSTmeltofRho: Melt curve was not loaded for material %d.\n", material->iMat);
-        return -1.0;
+        assert(0);
+        exit(1);
     }
 
     double rho_cgs = rho * material->CodeUnitstoCGSforRho;
-    if (!(rho_cgs > 0.0) || !isfinite(rho_cgs)) return -1.0;
+    if (!(rho_cgs > 0.0) || !isfinite(rho_cgs)) {
+        material->nLookupFail++;
+        ANEOS_WARN("ANEOSTmeltofRho: invalid rho = %.15e for material %d.\n", rho, material->iMat);
+        return ANEOS_FAIL_VALUE;
+    }
 
     /* Clamp to the tabulated range. */
     double rhoMin = material->rhoAxis[0];
@@ -1031,13 +1041,13 @@ double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
     double T = ANEOSTofRhoU(material, rho, u);
 
     if (ANEOSPartialsCGS(material, rho, T, &dPdrho_T, &dPdT_rho, &dudrho_T, &dudT_rho)) {
-        return -1e50;
+        return ANEOS_FAIL_VALUE;
     }
     if (!(dudT_rho > 0.0)) {
         /* Heat capacity must be positive; a non-positive du/dT is a table artefact. */
         material->nLookupFail++;
         ANEOS_WARN("ANEOSdPdRhoofRhoU: du/dT|rho = %.15e <= 0 at rho = %.15e, T = %.15e\n", dudT_rho, rho, T);
-        return -1e50;
+        return ANEOS_FAIL_VALUE;
     }
 
     double dPdrho_u = dPdrho_T - dPdT_rho * dudrho_T / dudT_rho;
@@ -1057,12 +1067,12 @@ double ANEOSdPdUofRhoU(ANEOSMATERIAL *material, double rho, double u)
     double T = ANEOSTofRhoU(material, rho, u);
 
     if (ANEOSPartialsCGS(material, rho, T, &dPdrho_T, &dPdT_rho, &dudrho_T, &dudT_rho)) {
-        return -1e50;
+        return ANEOS_FAIL_VALUE;
     }
     if (!(dudT_rho > 0.0)) {
         material->nLookupFail++;
         ANEOS_WARN("ANEOSdPdUofRhoU: du/dT|rho = %.15e <= 0 at rho = %.15e, T = %.15e\n", dudT_rho, rho, T);
-        return -1e50;
+        return ANEOS_FAIL_VALUE;
     }
 
     /* cgs: erg cm^-3 / (erg g^-1) -> code units. */
@@ -1086,7 +1096,7 @@ double ANEOSdPdRhoofRhoT(ANEOSMATERIAL *material, double rho, double T)
     double dPdrho_T, dPdT_rho;
 
     if (ANEOSPartialsCGS(material, rho, T, &dPdrho_T, &dPdT_rho, NULL, NULL)) {
-        return -1e50;
+        return ANEOS_FAIL_VALUE;
     }
     return dPdrho_T * material->CGStoCodeUnitsforP * material->CodeUnitstoCGSforRho;
 }
@@ -1099,7 +1109,7 @@ double ANEOSdPdTofRhoT(ANEOSMATERIAL *material, double rho, double T)
     double dPdrho_T, dPdT_rho;
 
     if (ANEOSPartialsCGS(material, rho, T, &dPdrho_T, &dPdT_rho, NULL, NULL)) {
-        return -1e50;
+        return ANEOS_FAIL_VALUE;
     }
     return dPdT_rho * material->CGStoCodeUnitsforP;
 }
@@ -1127,7 +1137,7 @@ double ANEOSGammaofRhoT(ANEOSMATERIAL *material, double rho, double T) {
         // and the difference in the resulting shear modulus is less than 25%
         double nu = 0.25;
         double c = ANEOSCofRhoT(material, rho, T);
-        if (c < -1e40) return -1e50;
+        if (c < -1e40) return ANEOS_FAIL_VALUE;
         double bulkModulus = rho * c * c;
         return bulkModulus * 3.0 * (1.0 - 2.0 * nu) / (2.0 * (1.0 + nu));
     }

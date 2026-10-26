@@ -73,7 +73,7 @@ static const char *currentTest = "";
 /* Informational line inside a running test; re-indents so END_TEST aligns. */
 #define NOTE(...) do { printf("\n    note: "); printf(__VA_ARGS__); printf("\n  %-44s", ""); } while (0)
 
-static int isSentinel(double v) { return v < -1e40; }
+static int isSentinel(double v) { return ANEOSFailed(v); }
 
 /* Sample points: interior of the table, log-spaced in rho and T. */
 /* 100 for a quick run (seconds); 1000 for a full sweep (minutes). */
@@ -514,15 +514,15 @@ static void testFailureContract(ANEOSMATERIAL *m)
     double THi = 2.0 * m->TAxis[m->nT-1];
     double uHuge = 1e6 * ANEOSUofRhoT(m, rhoOk, m->TAxis[m->nT-1] * 0.999);
 
-    CHECK(ANEOSUofRhoT(m, rhoLo, 300.0) == -1e50, "UofRhoT below rhoMin");
-    CHECK(ANEOSUofRhoT(m, rhoHi, 300.0) == -1e50, "UofRhoT above rhoMax");
-    CHECK(ANEOSUofRhoT(m, rhoOk, TLo) == -1e50, "UofRhoT below TMin");
-    CHECK(ANEOSUofRhoT(m, rhoOk, THi) == -1e50, "UofRhoT above TMax");
-    CHECK(ANEOSPofRhoT(m, rhoHi, 300.0) == -1e50, "PofRhoT above rhoMax");
-    CHECK(ANEOSCofRhoT(m, rhoHi, 300.0) == -1e50, "CofRhoT above rhoMax");
-    CHECK(ANEOSRhoofPT(m, 1.0, THi) == -1e50, "RhoofPT above TMax");
-    CHECK(ANEOSRhoofUT(m, 1.0, TLo) == -1e50, "RhoofUT below TMin");
-    CHECK(ANEOSTofRhoP(m, rhoHi, 1.0) == -1e50, "TofRhoP above rhoMax");
+    CHECK(ANEOSUofRhoT(m, rhoLo, 300.0) == ANEOS_FAIL_VALUE, "UofRhoT below rhoMin");
+    CHECK(ANEOSUofRhoT(m, rhoHi, 300.0) == ANEOS_FAIL_VALUE, "UofRhoT above rhoMax");
+    CHECK(ANEOSUofRhoT(m, rhoOk, TLo) == ANEOS_FAIL_VALUE, "UofRhoT below TMin");
+    CHECK(ANEOSUofRhoT(m, rhoOk, THi) == ANEOS_FAIL_VALUE, "UofRhoT above TMax");
+    CHECK(ANEOSPofRhoT(m, rhoHi, 300.0) == ANEOS_FAIL_VALUE, "PofRhoT above rhoMax");
+    CHECK(ANEOSCofRhoT(m, rhoHi, 300.0) == ANEOS_FAIL_VALUE, "CofRhoT above rhoMax");
+    CHECK(ANEOSRhoofPT(m, 1.0, THi) == ANEOS_FAIL_VALUE, "RhoofPT above TMax");
+    CHECK(ANEOSRhoofUT(m, 1.0, TLo) == ANEOS_FAIL_VALUE, "RhoofUT below TMin");
+    CHECK(ANEOSTofRhoP(m, rhoHi, 1.0) == ANEOS_FAIL_VALUE, "TofRhoP above rhoMax");
 
     /* TofRhoU falls back to TAxis[0], by contract. */
     CHECK(ANEOSTofRhoU(m, rhoHi, 1.0) == m->TAxis[0], "TofRhoU fallback above rhoMax");
@@ -532,10 +532,10 @@ static void testFailureContract(ANEOSMATERIAL *m)
     {
         double c, T;
         double P = ANEOSPCTofRhoU(m, rhoHi, 1.0, &c, &T);
-        CHECK(P == -1e50 && c == -1e50 && T == m->TAxis[0], "PCTofRhoU out of range: P=%g c=%g T=%g", P, c, T);
+        CHECK(P == ANEOS_FAIL_VALUE && c == ANEOS_FAIL_VALUE && T == m->TAxis[0], "PCTofRhoU out of range: P=%g c=%g T=%g", P, c, T);
     }
     /* Gamma with failed sound speed. */
-    if (!m->fixedGamma) CHECK(ANEOSGammaofRhoT(m, rhoHi, 300.0) == -1e50, "Gamma with failed c");
+    if (!m->fixedGamma) CHECK(ANEOSGammaofRhoT(m, rhoHi, 300.0) == ANEOS_FAIL_VALUE, "Gamma with failed c");
 
     CHECK(m->nLookupFail > nf0, "nLookupFail did not increase (%ld -> %ld)", nf0, m->nLookupFail);
     END_TEST();
@@ -563,7 +563,7 @@ static void testOptionalTables(ANEOSMATERIAL *m)
         double rHi = 2.0 * m->rhoAxis[m->nRho-1] * m->CGStoCodeUnitsforRho;
         CHECK(ANEOSTmeltofRho(m, rLo) == m->T_melt[0], "Tmelt clamp below table");
         CHECK(ANEOSTmeltofRho(m, rHi) == m->T_melt[m->nRho-1], "Tmelt clamp above table");
-        CHECK(ANEOSTmeltofRho(m, -1.0) == -1.0, "Tmelt for negative rho");
+        CHECK(ANEOSFailed(ANEOSTmeltofRho(m, -1.0)), "Tmelt for negative rho");
         double Tm = ANEOSTmeltofRho(m, rhoOk);
         CHECK(Tm >= 0.0 && isfinite(Tm), "Tmelt(rho=%g) = %g", rhoOk, Tm);
         /* Linear interpolation must lie between the neighbouring nodes. */
