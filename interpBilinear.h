@@ -42,10 +42,13 @@
  *   Cell (ix, iy) is the rectangle [x[ix], x[ix+1]] x [y[iy], y[iy+1]],
  *   0 <= ix <= nx-2, 0 <= iy <= ny-2, with local coordinates (u, v) in
  *   [0, 1]^2. Both intervals are CLOSED: x == x[nx-1] gives the last cell
- *   with u == 1. A relative roundoff tolerance tol accepts and clamps
- *   coordinates within tol*(1 + |x|) outside the axis, so that a state
- *   on the table edge survives a 10^x <-> log10 round trip; tol = 0
- *   disables that.
+ *   with u == 1. A roundoff tolerance tol, relative to the bound being
+ *   tested, accepts and clamps coordinates within tol*|axis[0]| below the
+ *   first node and tol*|axis[n-1]| above the last one, so that a state on
+ *   the table edge survives a unit-conversion or 10^x <-> log10 round
+ *   trip; tol = 0 disables that. The tolerance is deliberately not
+ *   absolute: a linear axis may start at 1e-25 and a log axis at -25, and
+ *   a bound that is exactly 0 simply gets no tolerance.
  *
  *   The interpolant is C0; on a cell boundary the cell to the right/above
  *   is used (the last cell at the upper edge), so derivatives there are
@@ -56,6 +59,9 @@
  *          scvheos 1.1 / reos3 1.1 cell arithmetic; closed intervals with
  *          roundoff tolerance; status codes instead of sentinels; one
  *          inversion with a strict (monotonic) and a scanning mode.
+ *   1.0.1  interpLocateAxis: edge tolerance relative to the bound instead
+ *          of tol*(1 + |x|), which was an absolute 1e-13 on a linear axis
+ *          starting at 1e-25 and let far-out-of-range densities through.
  */
 #ifndef INTERPBILINEAR_HINCLUDED
 #define INTERPBILINEAR_HINCLUDED
@@ -63,10 +69,10 @@
 #include <math.h>
 #include <stddef.h>
 
-#define INTERP_VERSION_TEXT   "1.0.0"
+#define INTERP_VERSION_TEXT   "1.0.1"
 #define INTERP_VERSION_MAJOR  1
 #define INTERP_VERSION_MINOR  0
-#define INTERP_VERSION_PATCH  0
+#define INTERP_VERSION_PATCH  1
 
 /*
  * Status codes. Everything that is not INTERP_SUCCESS is negative.
@@ -179,21 +185,21 @@ static inline int interpFindIndex(double x, const double *axis, int n)
 }
 
 /*
- * Locate x on the closed interval [axis[0], axis[n-1]] with roundoff
- * tolerance tol (see the header comment). Returns INTERP_SUCCESS with the
- * segment index *pi (0 <= i <= n-2) and the local coordinate *pw in [0, 1];
- * INTERP_BELOW or INTERP_ABOVE if x is outside by more than the tolerance;
- * INTERP_INVALID for a NaN. Outputs are untouched on failure.
+ * Locate x on the closed interval [axis[0], axis[n-1]] with the roundoff
+ * tolerance tol relative to each bound (see the header comment). Returns
+ * INTERP_SUCCESS with the segment index *pi (0 <= i <= n-2) and the local
+ * coordinate *pw in [0, 1]; INTERP_BELOW or INTERP_ABOVE if x is outside by
+ * more than the tolerance; INTERP_INVALID for a NaN. Outputs are untouched
+ * on failure.
  */
 static inline int interpLocateAxis(const double *axis, int n, double x, double tol, int *pi, double *pw)
 {
-    /* An infinite x gets no tolerance, otherwise eps would be infinite too. */
-    const double eps = (fabs(x) < HUGE_VAL) ? tol * (1.0 + fabs(x)) : 0.0;
+    const double lo = axis[0], hi = axis[n - 1];
     int i;
 
     if (x != x) return INTERP_INVALID;
-    if (!(x >= axis[0]))     { if (x >= axis[0] - eps)     x = axis[0];     else return INTERP_BELOW; }
-    if (!(x <= axis[n - 1])) { if (x <= axis[n - 1] + eps) x = axis[n - 1]; else return INTERP_ABOVE; }
+    if (!(x >= lo)) { if (x >= lo - tol * fabs(lo)) x = lo; else return INTERP_BELOW; }
+    if (!(x <= hi)) { if (x <= hi + tol * fabs(hi)) x = hi; else return INTERP_ABOVE; }
 
     i = interpFindIndex(x, axis, n);
     *pi = i;
