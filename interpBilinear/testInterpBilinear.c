@@ -149,6 +149,15 @@ static void testLocate(void)
     CHECK(interpLocateAxis(xAxis, NX, -INFINITY, 1e-13, &i, &w) == INTERP_BELOW, "-inf");
     CHECK(interpLocateAxis(xAxis, NX, INFINITY, 1e-13, &i, &w) == INTERP_ABOVE, "+inf");
     CHECK(interpLocateAxis(xAxis, NX, NAN, 1e-13, &i, &w) == INTERP_INVALID, "NaN");
+    /* The tolerance is relative to the bound, never absolute: on an axis
+     * starting at 1e-25 (the ANEOS tables) half the first node is far out. */
+    {
+        static const double tiny[3] = { 1e-25, 1e-20, 1e-15 };
+        CHECK(interpLocateAxis(tiny, 3, 0.5e-25, 1e-13, &i, &w) == INTERP_BELOW, "tiny axis: half the first node is below");
+        CHECK(interpLocateAxis(tiny, 3, 1e-25 * (1.0 - 1e-15), 1e-13, &i, &w) == INTERP_SUCCESS && i == 0 && w == 0.0, "tiny axis: roundoff below clamped");
+        CHECK(interpLocateAxis(tiny, 3, 1e-15 * (1.0 + 1e-15), 1e-13, &i, &w) == INTERP_SUCCESS && i == 1 && w == 1.0, "tiny axis: roundoff above clamped");
+        CHECK(interpLocateAxis(tiny, 3, 2e-15, 1e-13, &i, &w) == INTERP_ABOVE, "tiny axis: twice the last node is above");
+    }
     /* Outputs untouched on failure. */
     i = -7; w = -7.0;
     interpLocateAxis(xAxis, NX, 0.5 * xAxis[0], 0.0, &i, &w);
