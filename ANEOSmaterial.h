@@ -56,7 +56,7 @@
 
 /*
  * Relative roundoff tolerance at the table edges: a (rho, T) within
- * ANEOS_EDGE_TOL*(1 + |x|) outside an axis is clamped onto it instead of
+ * ANEOS_EDGE_TOL*|bound| outside an axis is clamped onto it instead of
  * being rejected, so that a state on the edge survives the code <-> cgs
  * unit round trip. Far below any physical scale.
  */
