@@ -74,12 +74,45 @@ static const char *currentTest = "";
     } \
 } while (0)
 
+/*
+ * Relative tolerance with a floor: the error is measured against max(|a|, |b|, scale). For
+ * pressures the scale is pressureScale() below: P is interpolated from table values of both
+ * signs (cold tension and thermal pressure), so where it crosses zero its roundoff is relative to
+ * the size of those values, not to P itself.
+ */
+#define CHECK_NEAR(a, b, tol, scale, ...) do { \
+    double _a = (a), _b = (b); \
+    double _den = fmax(fmax(fabs(_a), fabs(_b)), (scale)); \
+    double _err = fabs(_a - _b) / _den; \
+    nChecks++; \
+    if (!(_err <= (tol))) { \
+        nFails++; \
+        fprintf(stderr, "FAIL [%s] %s:%d: ", currentTest, __FILE__, __LINE__); \
+        fprintf(stderr, __VA_ARGS__); \
+        fprintf(stderr, " (got %.15e vs %.15e, err %.3e > %.1e relative to %.3e)\n", _a, _b, _err, (double)(tol), _den); \
+    } \
+} while (0)
+
 #define TEST(name) do { currentTest = name; printf("  %-44s", name); fflush(stdout); } while (0)
 #define END_TEST() do { printf("%s\n", nFails == failsBefore ? "ok" : "FAILED"); } while (0)
 /* Informational line inside a running test; re-indents so END_TEST aligns. */
 #define NOTE(...) do { printf("\n    note: "); printf(__VA_ARGS__); printf("\n  %-44s", ""); } while (0)
 
 static int isSentinel(double v) { return ANEOSFailed(v); }
+
+/*
+ * Pressure scale at (rho, T), code units: the largest |P| at the four table nodes of the cell. An
+ * interpolated or inverted P near zero is a difference of values of this size, so this is the
+ * scale of its roundoff (all P failures with a pure relative tolerance had |P| below ~1e-3 of it).
+ */
+static double pressureScale(ANEOSMATERIAL *m, double rho, double T)
+{
+    int i = interpFindIndex(rho * m->CodeUnitstoCGSforRho, m->rhoAxis, m->nRho);
+    int j = interpFindIndex(T, m->TAxis, m->nT);
+    double s = fmax(fmax(fabs(m->pArray[i][j]), fabs(m->pArray[i+1][j])),
+                    fmax(fabs(m->pArray[i][j+1]), fabs(m->pArray[i+1][j+1])));
+    return s * m->CGStoCodeUnitsforP;
+}
 
 /* Sample points: interior of the table, log-spaced in rho and T. */
 /* 100 for a quick run (seconds); 1000 for a full sweep (minutes). */
@@ -288,7 +321,7 @@ static void testTemperatureInversion(ANEOSMATERIAL *m)
         double T2 = ANEOSTofRhoU(m, rho, u);
         CHECK_REL(T2, T, 1e-10, "T roundtrip at rho=%g", rho);
         /* P(rho,u) must agree with P(rho,T) at the recovered T. */
-        CHECK_REL(ANEOSPofRhoU(m, rho, u), ANEOSPofRhoT(m, rho, T), 1e-10, "P(rho,u) vs P(rho,T) at rho=%g T=%g", rho, T);
+        CHECK_NEAR(ANEOSPofRhoU(m, rho, u), ANEOSPofRhoT(m, rho, T), 1e-10, pressureScale(m, rho, T), "P(rho,u) vs P(rho,T) at rho=%g T=%g", rho, T);
         CHECK_REL(ANEOSCofRhoU(m, rho, u), ANEOSCofRhoT(m, rho, T), 1e-10, "c(rho,u) vs c(rho,T) at rho=%g T=%g", rho, T);
     }
     /* T(rho,P): P(T) at fixed rho may have plateaus, so check consistency of P, not T. */
@@ -297,7 +330,7 @@ static void testTemperatureInversion(ANEOSMATERIAL *m)
         double P = ANEOSPofRhoT(m, rho, T);
         double T2 = ANEOSTofRhoP(m, rho, P);
         if (isSentinel(T2)) { CHECK(0, "TofRhoP failed at rho=%g T=%g", rho, T); continue; }
-        CHECK_REL(ANEOSPofRhoT(m, rho, T2), P, 1e-9, "P(rho,T(rho,P)) at rho=%g T=%g", rho, T);
+        CHECK_NEAR(ANEOSPofRhoT(m, rho, T2), P, 1e-9, pressureScale(m, rho, T), "P(rho,T(rho,P)) at rho=%g T=%g", rho, T);
     }
     CHECK(m->nLookupFail == 0, "nLookupFail = %ld after inversions", m->nLookupFail);
     if (nSkipped)
@@ -324,18 +357,39 @@ static void testDensityInversion(ANEOSMATERIAL *m)
          * lookup would correctly reject. */
         if (isSentinel(rhoP)) CHECK(0, "RhoofPT failed at rho=%g T=%g", rho, T);
         else if (rhoP > rhoEdge * (1.0 + 1e-13))
-            CHECK_REL(ANEOSPofRhoT(m, rhoP, T), P, 1e-9, "P(rho(P,T),T) at rho=%g T=%g", rho, T);
+            CHECK_NEAR(ANEOSPofRhoT(m, rhoP, T), P, 1e-9, pressureScale(m, rho, T), "P(rho(P,T),T) at rho=%g T=%g", rho, T);
         if (isSentinel(rhoU)) CHECK(0, "RhoofUT failed at rho=%g T=%g", rho, T);
         else if (rhoU > rhoEdge * (1.0 + 1e-13))
             CHECK_REL(ANEOSUofRhoT(m, rhoU, T), u, 1e-9, "u(rho(u,T),T) at rho=%g T=%g", rho, T);
     }
-    /* Exactly at a node the inversion must return that node. */
+    /*
+     * Exactly at a node the inversion must return that node, if that is the only density with this
+     * P at this T: on a row j where P(rho) is strictly increasing. On rows with a maximum or plateau
+     * (vapour dome, tension) the lowest-density root is returned by convention, which need not be
+     * the node; there only the pressure is required. The first monotonic row at or above nT/2 is
+     * used, so the exact check runs on every table that has one.
+     */
     {
-        int i = m->nRho / 2, j = m->nT / 2;
-        double T = m->TAxis[j];
-        double P = m->pArray[i][j] * m->CGStoCodeUnitsforP;
-        double rho = ANEOSRhoofPT(m, P, T);
-        CHECK_REL(rho * m->CodeUnitstoCGSforRho, m->rhoAxis[i], 1e-12, "rho(P,T) at node (%d,%d)", i, j);
+        int i = m->nRho / 2, j, jm = -1;
+        for (j = m->nT / 2; j < m->nT && jm < 0; j++) {
+            int k, mono = 1;
+            for (k = 0; k < m->nRho - 1 && mono; k++) mono = (m->pArray[k+1][j] > m->pArray[k][j]);
+            if (mono) jm = j;
+        }
+        j = (jm >= 0) ? jm : m->nT / 2;
+        {
+            double T = m->TAxis[j];
+            double P = m->pArray[i][j] * m->CGStoCodeUnitsforP;
+            double rho = ANEOSRhoofPT(m, P, T);
+            if (jm >= 0) {
+                CHECK_REL(rho * m->CodeUnitstoCGSforRho, m->rhoAxis[i], 1e-12, "rho(P,T) at node (%d,%d)", i, j);
+            } else {
+                CHECK(!isSentinel(rho), "RhoofPT failed at node (%d,%d)", i, j);
+                if (!isSentinel(rho))
+                    CHECK_NEAR(ANEOSPofRhoT(m, rho, T), P, 1e-12, pressureScale(m, rho, T), "P(rho(P,T),T) at node (%d,%d)", i, j);
+                NOTE("no row with P(rho) increasing at or above T index %d (table defect): rho(P,T) at node (%d,%d) only reproduces P", m->nT / 2, i, j);
+            }
+        }
     }
     CHECK(m->nLookupFail == 0, "nLookupFail = %ld after density inversions", m->nLookupFail);
     END_TEST();
@@ -353,7 +407,7 @@ static void testFusedLookup(ANEOSMATERIAL *m)
         double u = ANEOSUofRhoT(m, rho, T);
         double c, Tf;
         double P = ANEOSPCTofRhoU(m, rho, u, &c, &Tf);
-        CHECK_REL(P, ANEOSPofRhoU(m, rho, u), 1e-12, "fused P at rho=%g", rho);
+        CHECK_NEAR(P, ANEOSPofRhoU(m, rho, u), 1e-12, pressureScale(m, rho, T), "fused P at rho=%g", rho);
         CHECK_REL(c, ANEOSCofRhoU(m, rho, u), 1e-12, "fused c at rho=%g", rho);
         CHECK_REL(Tf, ANEOSTofRhoU(m, rho, u), 1e-12, "fused T at rho=%g", rho);
     }
@@ -461,21 +515,38 @@ static void testIsentrope(ANEOSMATERIAL *m)
 }
 
 /* 1 if P(rho', u) is strictly increasing in rho' across the density cell
- * containing rho, sampled at 32 points where u is attainable. Near the cold
- * curve the tabulated P(rho,u) can have a maximum (large effective Gamma at
- * low T), and rho(P,u) is then double-valued: not a testable state. */
+ * containing rho, sampled at 32 points where u is attainable and at rho itself.
+ * Near the cold curve the tabulated P(rho,u) can have a maximum or minimum
+ * (large effective Gamma at low T, the tension branch below rho0), and
+ * rho(P,u) is then double-valued: not a testable state. rho itself is part of
+ * the sequence because the state can sit at such a minimum between two sample
+ * points (forsterite at 1.83 g/cc and 35 K: P(rho', u) - P is +1e-5 at the
+ * lower node, 0 at rho and positive again above it, a double root that no
+ * sign change brackets). */
 static int pressureMonotoneInCell(ANEOSMATERIAL *m, double rho, double u)
 {
     double rho_cgs = rho * m->CodeUnitstoCGSforRho;
     int i = interpFindIndex(rho_cgs, m->rhoAxis, m->nRho);
     double prev = -INFINITY;
+    int bDone = 0;
     for (int k = 0; k <= 32; k++) {
-        double r = (m->rhoAxis[i] + (m->rhoAxis[i+1] - m->rhoAxis[i]) * k / 32.0) * m->CGStoCodeUnitsforRho;
-        double T = ANEOSTofRhoU(m, r, u);
-        if (T == m->TAxis[0]) continue;              /* fallback: u not attainable here */
-        double P = ANEOSPofRhoT(m, r, T);
-        if (!(P > prev)) return 0;
-        prev = P;
+        double r_cgs = m->rhoAxis[i] + (m->rhoAxis[i+1] - m->rhoAxis[i]) * k / 32.0;
+        for (int pass = 0; pass < 2; pass++) {
+            double r;
+            if (pass == 0) {
+                /* rho itself, in order, before the first sample above it. */
+                if (bDone || r_cgs <= rho_cgs) continue;
+                r = rho;
+                bDone = 1;
+            } else {
+                r = r_cgs * m->CGStoCodeUnitsforRho;
+            }
+            double T = ANEOSTofRhoU(m, r, u);
+            if (T == m->TAxis[0]) continue;              /* fallback: u not attainable here */
+            double P = ANEOSPofRhoT(m, r, T);
+            if (!(P > prev)) return 0;
+            prev = P;
+        }
     }
     return 1;
 }
