@@ -49,6 +49,8 @@
  *          The table is validated at load (fatal): rho0 > 0, both axes positive
  *          and strictly increasing, every entry of P, u, s and c finite, the
  *          melt curve finite and >= 0 (SCvH and REOS3 already checked theirs).
+ *          An inconsistent unit pair (exactly one of dKpcUnit, dMsolUnit <= 0,
+ *          NaN, inf) is fatal; it silently meant cgs.
  */
 #define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1

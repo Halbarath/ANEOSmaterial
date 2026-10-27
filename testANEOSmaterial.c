@@ -804,6 +804,56 @@ static void testTableValidation(void)
     END_TEST();
 }
 
+/*
+ * Initialise a material with the unit pair (dKpcUnit, dMsolUnit) in a child process. Returns 0 if
+ * the library accepted it, 1 if it stopped the program (assert(0), or exit(1) with -DNDEBUG), -1
+ * for anything else.
+ */
+static int initUnitsRejected(int iMat, double dKpcUnit, double dMsolUnit)
+{
+    fflush(NULL);
+    pid_t pid = fork();
+    if (pid == 0) {
+        if (freopen("/dev/null", "w", stderr) == NULL) _exit(3);   /* the expected diagnostic */
+        ANEOSMATERIAL *m = ANEOSinitMaterial(iMat, dKpcUnit, dMsolUnit);
+        ANEOSfinalizeMaterial(m);
+        _exit(0);
+    }
+    int status = 0;
+    if (pid < 0 || waitpid(pid, &status, 0) != pid) return -1;
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) return 0;
+    if ((WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT) || (WIFEXITED(status) && WEXITSTATUS(status) == 1)) return 1;
+    return -1;
+}
+
+/*
+ * One rule for the unit pair in EOSlib and every sublibrary: both units > 0 (and finite) are code
+ * units, both <= 0 is cgs, anything else is fatal. (Before, exactly one unit <= 0 made igeos divide
+ * by zero, Tillotson assert, and ANEOS, SCvH and REOS3 silently use cgs.)
+ */
+static void testUnitPair(int iMat)
+{
+    int failsBefore = nFails;
+    TEST("unit pair: code units, cgs or fatal");
+    static const struct { double dKpcUnit, dMsolUnit; int bRejected; const char *what; } cases[] = {
+        {2.06701e-13, 4.80438e-08, 0, "both > 0: code units"},
+        {0.0, 0.0, 0, "both 0: cgs"},
+        {-1.0, -1.0, 0, "both < 0: cgs"},
+        {0.0, -1.0, 0, "0 and < 0: cgs"},
+        {2.06701e-13, 0.0, 1, "dMsolUnit = 0 only"},
+        {0.0, 4.80438e-08, 1, "dKpcUnit = 0 only"},
+        {-1.0, 4.80438e-08, 1, "dKpcUnit < 0 only"},
+        {2.06701e-13, NAN, 1, "dMsolUnit NaN"},
+        {INFINITY, 4.80438e-08, 1, "dKpcUnit inf"},
+        {NAN, NAN, 1, "both NaN"},
+    };
+    for (size_t k = 0; k < sizeof(cases) / sizeof(cases[0]); k++) {
+        int r = initUnitsRejected(iMat, cases[k].dKpcUnit, cases[k].dMsolUnit);
+        CHECK(r == cases[k].bRejected, "%s: %s (got %d)", cases[k].what, cases[k].bRejected ? "must be fatal" : "must be accepted", r);
+    }
+    END_TEST();
+}
+
 /* ------------------------------------------------------------------- main */
 
 int main(int argc, char *argv[])
@@ -832,6 +882,7 @@ int main(int argc, char *argv[])
     testOptionalTables(m);
     testStrengthFileValidation(m);
     testTableValidation();
+    testUnitPair(iMat);
     testFailureContract(m);   /* last: deliberately increments nLookupFail */
 
     ANEOSfinalizeMaterial(m);
