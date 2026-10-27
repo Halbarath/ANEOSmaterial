@@ -27,6 +27,7 @@
  * Usage: testInterpBilinear. Exit status is the number of failed checks.
  */
 #include <math.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "interpBilinear.h"
@@ -410,13 +411,61 @@ static void testNodeDeriv(void)
     END_TEST();
 }
 
+/*
+ * The layout of the public types belongs to INTERP_ABI_VERSION (see interpBilinear.h): the
+ * consumers embed INTERPGRID in their material structs and check the number at compile time. The
+ * reference structs below spell out layout 1; a change of the public types without a bump of
+ * INTERP_ABI_VERSION (and of this reference) makes this test fail.
+ */
+#define LAYOUT_REFERENCE_ABI 1
+struct refGrid { int nx; int ny; const double *x; const double *y; };
+struct refCell { int ix; int iy; double u; double v; };
+struct refInvertOpt { int bFallback; double valTol; double edgeTol; double nodeTol; };
+
+static void testLayout(void)
+{
+    int failsBefore = nFails;
+    TEST("type layout matches INTERP_ABI_VERSION");
+    CHECK(INTERP_ABI_VERSION == LAYOUT_REFERENCE_ABI,
+          "INTERP_ABI_VERSION = %d, the layout reference in this test is for %d: update the reference", INTERP_ABI_VERSION, LAYOUT_REFERENCE_ABI);
+    if (INTERP_ABI_VERSION != LAYOUT_REFERENCE_ABI) { END_TEST(); return; }
+
+    CHECK(sizeof(INTERPGRID) == sizeof(struct refGrid), "sizeof(INTERPGRID) changed: bump INTERP_ABI_VERSION");
+    CHECK(offsetof(INTERPGRID, nx) == offsetof(struct refGrid, nx) && offsetof(INTERPGRID, ny) == offsetof(struct refGrid, ny) &&
+          offsetof(INTERPGRID, x) == offsetof(struct refGrid, x) && offsetof(INTERPGRID, y) == offsetof(struct refGrid, y),
+          "INTERPGRID member offsets changed: bump INTERP_ABI_VERSION");
+    CHECK(sizeof(((INTERPGRID *) 0)->nx) == sizeof(int) && sizeof(((INTERPGRID *) 0)->x) == sizeof(const double *), "INTERPGRID member types changed");
+
+    CHECK(sizeof(INTERPCELL) == sizeof(struct refCell), "sizeof(INTERPCELL) changed: bump INTERP_ABI_VERSION");
+    CHECK(offsetof(INTERPCELL, ix) == offsetof(struct refCell, ix) && offsetof(INTERPCELL, iy) == offsetof(struct refCell, iy) &&
+          offsetof(INTERPCELL, u) == offsetof(struct refCell, u) && offsetof(INTERPCELL, v) == offsetof(struct refCell, v),
+          "INTERPCELL member offsets changed: bump INTERP_ABI_VERSION");
+    CHECK(sizeof(((INTERPCELL *) 0)->ix) == sizeof(int) && sizeof(((INTERPCELL *) 0)->u) == sizeof(double), "INTERPCELL member types changed");
+
+    CHECK(sizeof(INTERPINVERTOPT) == sizeof(struct refInvertOpt), "sizeof(INTERPINVERTOPT) changed: bump INTERP_ABI_VERSION");
+    CHECK(offsetof(INTERPINVERTOPT, bFallback) == offsetof(struct refInvertOpt, bFallback) &&
+          offsetof(INTERPINVERTOPT, valTol) == offsetof(struct refInvertOpt, valTol) &&
+          offsetof(INTERPINVERTOPT, edgeTol) == offsetof(struct refInvertOpt, edgeTol) &&
+          offsetof(INTERPINVERTOPT, nodeTol) == offsetof(struct refInvertOpt, nodeTol),
+          "INTERPINVERTOPT member offsets changed: bump INTERP_ABI_VERSION");
+
+    /* The two option sets keep their member order (positional initialisers in the consumers). */
+    {
+        static const INTERPINVERTOPT s = INTERP_INVERT_STRICT, t = INTERP_INVERT_TOLERANT;
+        CHECK(s.bFallback == 0 && s.valTol == 1e-13 && s.edgeTol == 0.0 && s.nodeTol == 0.0, "INTERP_INVERT_STRICT");
+        CHECK(t.bFallback == 1 && t.valTol == 0.0 && t.edgeTol == 1e-4 && t.nodeTol == 1e-12, "INTERP_INVERT_TOLERANT");
+    }
+    END_TEST();
+}
+
 /* ------------------------------------------------------------------- main */
 
 int main(void)
 {
-    printf("interpBilinear %s test suite: synthetic %d x %d grid\n", INTERP_VERSION_TEXT, NX, NY);
+    printf("interpBilinear %s (type layout %d) test suite: synthetic %d x %d grid\n", INTERP_VERSION_TEXT, INTERP_ABI_VERSION, NX, NY);
     setupGrids();
 
+    testLayout();
     testLocate();
     testValue();
     testGradient();
