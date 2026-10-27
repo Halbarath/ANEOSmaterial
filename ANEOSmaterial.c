@@ -1138,14 +1138,14 @@ double ANEOSTmeltofRho(ANEOSMATERIAL *material, double rho)
     if (rho_cgs <= rhoMin) return material->T_melt[0];
     if (rho_cgs >= rhoMax) return material->T_melt[material->nRho-1];
 
-    /* Linear interpolation along the rho axis; rho is inside the axis after the clamp. */
-    int i;
-    double x;
-    if (interpLocateAxis(material->rhoAxis, material->nRho, rho_cgs, 0.0, &i, &x) != INTERP_SUCCESS) {
-        /* Cannot happen after the clamp, but keep the contract explicit. */
-        fprintf(stderr, "ANEOSTmeltofRho: interpolation failed for rho = %.15e\n", rho);
-        return -1.0;
-    }
+    /*
+     * Linear interpolation along the rho axis. rho_cgs lies strictly inside the axis after the
+     * clamp, so the locate cannot fail; its status is ignored on purpose (it returned -1.0 here,
+     * outside the failure contract, on a path that cannot be reached).
+     */
+    int i = 0;
+    double x = 0.0;
+    (void) interpLocateAxis(material->rhoAxis, material->nRho, rho_cgs, 0.0, &i, &x);
     return material->T_melt[i] + x * (material->T_melt[i+1] - material->T_melt[i]);
 }
 
@@ -1293,4 +1293,5 @@ void ANEOSPrintMat(ANEOSMATERIAL *material, FILE *fp)
     fprintf(fp,"# Table size: nRho = %d, nT = %d\n", material->nRho, material->nT);
     fprintf(fp,"# Table boundaries (cgs units): minRho = %g, maxRho = %g, minT = %g, maxT = %g\n",material->rhoAxis[0],material->rhoAxis[material->nRho-1],material->TAxis[0],material->TAxis[material->nT-1]);
     fprintf(fp,"# %s\n",material->matstring);
+    fprintf(fp,"# Failed lookups and fallbacks (nLookupFail): %ld\n", material->nLookupFail);
 }

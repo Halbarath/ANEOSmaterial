@@ -57,6 +57,10 @@
  *          sentinel on to a second lookup (counted twice). Requires interpBilinear
  *          1.0.3 with INTERP_ABI_VERSION 1 (ANEOS_INTERP_*, prefixed: the
  *          unprefixed INTERP_*_REQUIRED clashed with scvheos.h and reos3.h).
+ *          ANEOSPrintMat prints nLookupFail. ANEOSTmeltofRho no longer has an
+ *          unreachable branch returning -1.0 (outside the failure contract);
+ *          its comment now says what it does (fatal without a melt curve,
+ *          ANEOS_FAIL_VALUE for an invalid rho, clamped to the table).
  */
 #define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1
@@ -270,7 +274,8 @@ int ANEOSPhaseofRhoU(ANEOSMATERIAL *material, double rho, double u);
 int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T);
 
 // Melt temperature from the optional _tmelt table, clamped to the table's
-// density range. Returns -1.0 if no melt curve is loaded or rho is invalid.
+// density range. Fatal if no melt curve is loaded; ANEOS_FAIL_VALUE (counted)
+// for a rho that is not positive and finite.
 double ANEOSTmeltofRho(ANEOSMATERIAL *material, double rho);
 
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2);
