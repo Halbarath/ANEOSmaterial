@@ -32,11 +32,17 @@
  * that depend on them: there the library's documented response (some root of
  * a non-monotonic line, or the -1e50 sentinel) is not an invariant.
  */
+/* fork() and waitpid() for the fatal paths of the strength-file reader (POSIX). */
+#define _POSIX_C_SOURCE 200809L
+
 #include <float.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
+#include <unistd.h>
+#include <sys/wait.h>
 #include "ANEOSmaterial.h"
 
 /* ---------------------------------------------------------------- harness */
@@ -586,6 +592,81 @@ static void testOptionalTables(ANEOSMATERIAL *m)
     END_TEST();
 }
 
+/*
+ * Parse a strength file in a child process. Returns 0 if the reader accepted it, 1 if it stopped
+ * the program (assert(0), or exit(1) with -DNDEBUG), -1 for anything else.
+ */
+static int strengthFileRejected(ANEOSMATERIAL *m, const char *path)
+{
+    fflush(NULL);
+    pid_t pid = fork();
+    if (pid == 0) {
+        if (freopen("/dev/null", "w", stderr) == NULL) _exit(3);   /* the expected diagnostic */
+        int r = ANEOSReadStrengthParameters(m, (char *) path);
+        _exit(r == 0 ? 0 : 2);
+    }
+    int status = 0;
+    if (pid < 0 || waitpid(pid, &status, 0) != pid) return -1;
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) return 0;
+    if ((WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT) || (WIFEXITED(status) && WEXITSTATUS(status) == 1)) return 1;
+    return -1;
+}
+
+static void writeFile(const char *path, const char *text)
+{
+    FILE *fp = fopen(path, "w");
+    if (fp == NULL) { perror(path); exit(1); }
+    fputs(text, fp);
+    fclose(fp);
+}
+
+/*
+ * The strength parameters are validated when they are read, so a bad file stops the run at
+ * initialisation and not at the first strength evaluation: YM > Y0 (the intact strength has a
+ * pole at P = (Y0 - YM)/mui otherwise), mui > 0, xi > 0, a positive fixed Gamma, mud for model 2,
+ * a known model and finite values ("nan" and "inf" are numbers for strtod).
+ */
+static void testStrengthFileValidation(ANEOSMATERIAL *m)
+{
+    int failsBefore = nFails;
+    TEST("strength file validation at load");
+    const char *path = "testANEOSmaterial_strength.tmp";
+    static const struct { const char *text; int bRejected; const char *what; } cases[] = {
+        {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 0, "model 1, no mud"},
+        {"yieldStrengthModel = 2\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nmud = 0.6\nxi = 1.2\nGamma = 3e11\n", 0, "model 2, fixed Gamma"},
+        {"yieldStrengthModel = 2\nY0 = 0\nYM = 3.5e10\nmui = 1.5\nmud = 0\nxi = 1.2\nGamma = -1\n", 0, "model 2, Y0 = 0, mud = 0"},
+        {"yieldStrengthModel = 0\nY0 = 1e8\nYM = 1e8\nmui = 0\nxi = 0\nGamma = 0\n", 0, "model 0 (no limiter): relations not needed"},
+        {"yieldStrengthModel = 1\nY0 = 3.5e10\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1, "YM == Y0"},
+        {"yieldStrengthModel = 1\nY0 = 3.5e10\nYM = 1e8\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1, "YM < Y0"},
+        {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 0\nxi = 1.2\nGamma = -1\n", 1, "mui = 0"},
+        {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 0\nGamma = -1\n", 1, "xi = 0"},
+        {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = 0\n", 1, "fixed Gamma = 0"},
+        {"yieldStrengthModel = 2\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1, "model 2 without mud"},
+        {"yieldStrengthModel = 2\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nmud = -0.5\nxi = 1.2\nGamma = -1\n", 1, "model 2, mud < 0"},
+        {"yieldStrengthModel = 3\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1, "unknown model 3"},
+        {"yieldStrengthModel = 1\nY0 = nan\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1, "Y0 = nan"},
+        {"yieldStrengthModel = 1\nY0 = 1e8\nYM = inf\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1, "YM = inf"},
+        {"yieldStrengthModel = 2\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nmud = nan\nxi = 1.2\nGamma = -1\n", 1, "mud = nan"},
+        {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\n", 1, "Gamma missing"},
+    };
+    for (size_t k = 0; k < sizeof(cases) / sizeof(cases[0]); k++) {
+        writeFile(path, cases[k].text);
+        int r = strengthFileRejected(m, path);
+        CHECK(r == cases[k].bRejected, "%s: %s (got %d)", cases[k].what, cases[k].bRejected ? "must be rejected" : "must be accepted", r);
+    }
+    /* An accepted file is read into the material (parsed here in the parent, then restored). */
+    {
+        ANEOSMATERIAL save = *m;
+        writeFile(path, cases[1].text);
+        CHECK(ANEOSReadStrengthParameters(m, (char *) path) == 0, "valid file read");
+        CHECK(m->yieldStrengthModel == 2 && m->Y0 == 1e8 && m->YM == 3.5e10 && m->mui == 1.5 && m->mud == 0.6 &&
+              m->xi == 1.2 && m->fixedGamma == 1 && m->Gamma == 3e11, "values of the valid file");
+        *m = save;
+    }
+    remove(path);
+    END_TEST();
+}
+
 /* ------------------------------------------------------------------- main */
 
 int main(int argc, char *argv[])
@@ -612,6 +693,7 @@ int main(int argc, char *argv[])
     testIsentrope(m);
     testRhoofPU(m);
     testOptionalTables(m);
+    testStrengthFileValidation(m);
     testFailureContract(m);   /* last: deliberately increments nLookupFail */
 
     ANEOSfinalizeMaterial(m);

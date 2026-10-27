@@ -414,7 +414,17 @@ int ANEOSReadMeltCurve(ANEOSMATERIAL *material, char *inputfile)
  *
  * Whitespace around '=' is ignored; '#' starts a comment anywhere on a line.
  * Returns 1 if the file does not exist (no strength available), 0 on success.
- * Malformed files are fatal.
+ * Malformed files are fatal, and so are parameters the yield model cannot use,
+ * so that a bad file stops the run at initialisation and not at the first
+ * strength evaluation:
+ *   - every value must be finite (strtod accepts "nan" and "inf");
+ *   - yieldStrengthModel must be 0, 1 or 2 (the models EOSYieldStrength knows);
+ *   - Y0 >= 0, YM >= 0, mui >= 0, xi >= 0, Gamma >= 0 (or the sentinel -1);
+ *   - for models 1 and 2: YM > Y0 (otherwise the intact strength
+ *     Y0 + mui P/(1 + mui P/(YM - Y0)) has a pole at P = (Y0 - YM)/mui and changes
+ *     sign), mui > 0, xi > 0 (xi = 0 makes the thermal softening tanh(0) = 0, i.e.
+ *     no strength at all) and a fixed Gamma > 0;
+ *   - for model 2: mud >= 0 must be given (the damaged strength mud*P).
  */
 int ANEOSReadStrengthParameters(ANEOSMATERIAL *material, char *inputfile)
 {
@@ -512,14 +522,36 @@ int ANEOSReadStrengthParameters(ANEOSMATERIAL *material, char *inputfile)
 
     fclose(file);
 
-    if ((material->yieldStrengthModel < 0) || (material->Y0 < 0.0) || (material->YM < 0.0) ||
-        (material->mui < 0.0) || (material->xi < 0.0) || (material->Gamma < 0.0)) {
+    /* Missing parameters keep their negative initial values. NaN fails every comparison. */
+    if ((material->yieldStrengthModel < 0) || (material->yieldStrengthModel > 2) ||
+        !(material->Y0 >= 0.0) || !(material->YM >= 0.0) || !(material->mui >= 0.0) ||
+        !(material->xi >= 0.0) || !(material->Gamma >= 0.0) ||
+        !isfinite(material->Y0) || !isfinite(material->YM) || !isfinite(material->mui) ||
+        !isfinite(material->xi) || !isfinite(material->Gamma) || !isfinite(material->mud)) {
         fprintf(stderr, "ANEOSReadStrengthParameters: missing or invalid parameter in %s "
-                "(yieldStrengthModel = %d Y0 = %g YM = %g mui = %g xi = %g Gamma = %g)\n",
+                "(yieldStrengthModel = %d (0, 1 or 2) Y0 = %g YM = %g mui = %g xi = %g Gamma = %g mud = %g)\n",
                 inputfile, material->yieldStrengthModel, material->Y0, material->YM,
-                material->mui, material->xi, material->Gamma);
+                material->mui, material->xi, material->Gamma, material->mud);
         assert(0);
         exit(1);
+    }
+
+    if (material->yieldStrengthModel >= 1) {
+        if (!(material->YM > material->Y0) || !(material->mui > 0.0) || !(material->xi > 0.0) ||
+            (material->fixedGamma && !(material->Gamma > 0.0))) {
+            fprintf(stderr, "ANEOSReadStrengthParameters: yieldStrengthModel = %d in %s needs YM > Y0, "
+                    "mui > 0, xi > 0 and a positive fixed Gamma (Y0 = %g YM = %g mui = %g xi = %g Gamma = %g)\n",
+                    material->yieldStrengthModel, inputfile, material->Y0, material->YM,
+                    material->mui, material->xi, material->Gamma);
+            assert(0);
+            exit(1);
+        }
+        if (material->yieldStrengthModel == 2 && !(material->mud >= 0.0)) {
+            fprintf(stderr, "ANEOSReadStrengthParameters: yieldStrengthModel = 2 in %s needs mud >= 0 "
+                    "(damaged material), got mud = %g (missing?)\n", inputfile, material->mud);
+            assert(0);
+            exit(1);
+        }
     }
 
     return 0;

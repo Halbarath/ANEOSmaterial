@@ -43,6 +43,9 @@
  *          ANEOSFailed() replace the literal -1e50, ANEOS_SUCCESS/ANEOS_FAIL
  *          status codes; ANEOSTmeltofRho returns the sentinel for an
  *          invalid rho (a missing melt curve is fatal). Numerics unchanged.
+ *          ANEOSReadStrengthParameters validates the parameters at load (fatal):
+ *          finite values, model 0, 1 or 2, and for models 1/2 YM > Y0, mui > 0,
+ *          xi > 0, a positive fixed Gamma, and mud >= 0 for model 2.
  */
 #define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1
