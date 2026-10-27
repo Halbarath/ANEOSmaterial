@@ -717,13 +717,17 @@ double ANEOSTofRhoP(ANEOSMATERIAL *material, double rho, double p)
 }
 
 /*
- * Calculates internal energy u(p,T)
+ * Calculates internal energy u(p,T).
+ *
+ * The chained lookups (u(p, T), u(rho, p), p(u, T)) stop at a failed intermediate: they return
+ * ANEOS_FAIL_VALUE, counted once by the call that failed, instead of passing the sentinel on to
+ * the next lookup (which failed again and counted it a second time).
  */
 double ANEOSUofPT(ANEOSMATERIAL *material, double p, double T)
 {
     double rho = ANEOSRhoofPT(material,p,T);
-    double u = ANEOSUofRhoT(material,rho,T);
-    return u;
+    if (ANEOSFailed(rho)) return ANEOS_FAIL_VALUE;
+    return ANEOSUofRhoT(material,rho,T);
 }
 
 /*
@@ -746,8 +750,8 @@ double ANEOSUofRhoT(ANEOSMATERIAL *material, double rho, double T)
 double ANEOSUofRhoP(ANEOSMATERIAL *material, double rho, double p)
 {
     double T = ANEOSTofRhoP(material,rho,p);
-    double u = ANEOSUofRhoT(material,rho,T);
-    return u;
+    if (ANEOSFailed(T)) return ANEOS_FAIL_VALUE;   /* see ANEOSUofPT */
+    return ANEOSUofRhoT(material,rho,T);
 }
 
 /*
@@ -756,8 +760,8 @@ double ANEOSUofRhoP(ANEOSMATERIAL *material, double rho, double p)
 double ANEOSPofUT(ANEOSMATERIAL *material, double u, double T)
 {
     double rho = ANEOSRhoofUT(material,u,T);
-    double p = ANEOSPofRhoT(material,rho,T);
-    return p;
+    if (ANEOSFailed(rho)) return ANEOS_FAIL_VALUE;   /* see ANEOSUofPT */
+    return ANEOSPofRhoT(material,rho,T);
 }
 
 /*

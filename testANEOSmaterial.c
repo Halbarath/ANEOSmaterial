@@ -496,8 +496,14 @@ static void testRhoofPU(ANEOSMATERIAL *m)
         if (!pressureMonotoneInCell(m, rho, u)) { nSkippedBump++; continue; }
         double rho2 = ANEOSRhoofPU(m, P, u);
         if (isSentinel(rho2)) { CHECK(0, "RhoofPU failed at rho=%g T=%g", rho, T); continue; }
-        /* Possibly another root; the returned state must reproduce (P, u). */
-        CHECK_REL(ANEOSPofRhoU(m, rho2, u), P, 1e-7, "P at rho(P,u), rho=%g T=%g", rho, T);
+        /* Possibly another root; the returned state must reproduce (P, u). The root is converged
+         * to 1e-10 in density, so the P residual is up to 1e-10 rho dP/drho|u, which relative to P
+         * is (K/P) 1e-10 and exceeds 1e-7 where P crosses zero; the bound includes that term. */
+        {
+            double h = 1e-6 * rho2, P2 = ANEOSPofRhoU(m, rho2, u);
+            double slope = fmax(fabs(ANEOSPofRhoU(m, rho2 + h, u) - P2), fabs(P2 - ANEOSPofRhoU(m, rho2 - h, u))) / h;
+            CHECK(fabs(P2 - P) <= 1e-7 * fabs(P) + 4.0 * 1e-10 * rho2 * slope, "P at rho(P,u), rho=%g T=%g: %.15e vs %.15e", rho, T, P2, P);
+        }
         double T2 = ANEOSTofPU(m, P, u);
         CHECK(!isSentinel(T2) && T2 > 0.0, "TofPU failed at rho=%g T=%g", rho, T);
     }
@@ -539,6 +545,22 @@ static void testFailureContract(ANEOSMATERIAL *m)
         double c, T;
         double P = ANEOSPCTofRhoU(m, rhoHi, 1.0, &c, &T);
         CHECK(P == ANEOS_FAIL_VALUE && c == ANEOS_FAIL_VALUE && T == m->TAxis[0], "PCTofRhoU out of range: P=%g c=%g T=%g", P, c, T);
+    }
+    /* Chained lookups: a failed intermediate gives the sentinel, counted exactly once. */
+    {
+        long nf = m->nLookupFail;
+        CHECK(ANEOSUofPT(m, 1.0, THi) == ANEOS_FAIL_VALUE, "UofPT with rho(P, T) failing (T above TMax)");
+        CHECK(m->nLookupFail == nf + 1, "UofPT failure counted once (%ld)", m->nLookupFail - nf);
+        CHECK(ANEOSUofRhoP(m, rhoHi, 1.0) == ANEOS_FAIL_VALUE, "UofRhoP with T(rho, P) failing (rho above rhoMax)");
+        CHECK(m->nLookupFail == nf + 2, "UofRhoP failure counted once (%ld)", m->nLookupFail - nf);
+        CHECK(ANEOSPofUT(m, 1.0, TLo) == ANEOS_FAIL_VALUE, "PofUT with rho(u, T) failing (T below TMin)");
+        CHECK(m->nLookupFail == nf + 3, "PofUT failure counted once (%ld)", m->nLookupFail - nf);
+        /* On success they are the composition of the two lookups. */
+        double rho = rhoOk, T = sampleT(m, NSAMPLE_T / 2), P = ANEOSPofRhoT(m, rho, T), u = ANEOSUofRhoT(m, rho, T);
+        CHECK(ANEOSUofPT(m, P, T) == ANEOSUofRhoT(m, ANEOSRhoofPT(m, P, T), T), "UofPT = u(rho(P, T), T)");
+        CHECK(ANEOSUofRhoP(m, rho, P) == ANEOSUofRhoT(m, rho, ANEOSTofRhoP(m, rho, P)), "UofRhoP = u(rho, T(rho, P))");
+        CHECK(ANEOSPofUT(m, u, T) == ANEOSPofRhoT(m, ANEOSRhoofUT(m, u, T), T), "PofUT = P(rho(u, T), T)");
+        CHECK(m->nLookupFail == nf + 3, "successful chained lookups counted (%ld)", m->nLookupFail - nf);
     }
     /* Gamma with failed sound speed. */
     if (!m->fixedGamma) CHECK(ANEOSGammaofRhoT(m, rhoHi, 300.0) == ANEOS_FAIL_VALUE, "Gamma with failed c");

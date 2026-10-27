@@ -51,7 +51,10 @@
  *          melt curve finite and >= 0 (SCvH and REOS3 already checked theirs).
  *          An inconsistent unit pair (exactly one of dKpcUnit, dMsolUnit <= 0,
  *          NaN, inf) is fatal; it silently meant cgs. New ANEOSIsInTable,
- *          ANEOSTmin and ANEOSUCold, so that EOSlib no longer reads the axes. Requires interpBilinear
+ *          ANEOSTmin and ANEOSUCold, so that EOSlib no longer reads the axes.
+ *          ANEOSUofPT, ANEOSUofRhoP and ANEOSPofUT return ANEOS_FAIL_VALUE when
+ *          their intermediate lookup fails (counted once) instead of passing the
+ *          sentinel on to a second lookup (counted twice). Requires interpBilinear
  *          1.0.3 with INTERP_ABI_VERSION 1 (ANEOS_INTERP_*, prefixed: the
  *          unprefixed INTERP_*_REQUIRED clashed with scvheos.h and reos3.h).
  */
