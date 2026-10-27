@@ -50,20 +50,31 @@
  *          and strictly increasing, every entry of P, u, s and c finite, the
  *          melt curve finite and >= 0 (SCvH and REOS3 already checked theirs).
  *          An inconsistent unit pair (exactly one of dKpcUnit, dMsolUnit <= 0,
- *          NaN, inf) is fatal; it silently meant cgs.
+ *          NaN, inf) is fatal; it silently meant cgs. Requires interpBilinear
+ *          1.0.3 with INTERP_ABI_VERSION 1 (ANEOS_INTERP_*, prefixed: the
+ *          unprefixed INTERP_*_REQUIRED clashed with scvheos.h and reos3.h).
  */
 #define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1
 #define ANEOS_VERSION_MINOR   2
 #define ANEOS_VERSION_PATCH   0
 
-/* Required version of the interpBilinear core; checked at compile time. */
-#define INTERP_VERSION_MAJOR_REQUIRED 1
-#define INTERP_VERSION_MINOR_REQUIRED 0
-#define INTERP_VERSION_PATCH_REQUIRED 2
+/*
+ * interpBilinear: the minimum version and the layout of its types this library needs. The names
+ * carry the library prefix because ANEOSmaterial, scvheos and reos3 all vendor the core and their
+ * headers meet in one translation unit (EOSlib), where only the first copy of the core is
+ * included (see INTERP_ABI_VERSION in interpBilinear.h). Checked at compile time.
+ */
+#define ANEOS_INTERP_VERSION_MAJOR_REQUIRED 1
+#define ANEOS_INTERP_VERSION_MINOR_REQUIRED 0
+#define ANEOS_INTERP_VERSION_PATCH_REQUIRED 3
+#define ANEOS_INTERP_ABI_VERSION 1
 #if (INTERP_VERSION_MAJOR * 10000 + INTERP_VERSION_MINOR * 100 + INTERP_VERSION_PATCH) < \
-    (INTERP_VERSION_MAJOR_REQUIRED * 10000 + INTERP_VERSION_MINOR_REQUIRED * 100 + INTERP_VERSION_PATCH_REQUIRED)
-#error "ANEOSmaterial: the vendored interpBilinear is older than the required version"
+    (ANEOS_INTERP_VERSION_MAJOR_REQUIRED * 10000 + ANEOS_INTERP_VERSION_MINOR_REQUIRED * 100 + ANEOS_INTERP_VERSION_PATCH_REQUIRED)
+#error "ANEOSmaterial: the interpBilinear in effect is older than the required version (in EOSlib: the copy of the first library header included)"
+#endif
+#if !defined(INTERP_ABI_VERSION) || (INTERP_ABI_VERSION != ANEOS_INTERP_ABI_VERSION)
+#error "ANEOSmaterial: the interpBilinear in effect has another type layout (INTERP_ABI_VERSION) than this library; update the vendored copies together"
 #endif
 
 /*
