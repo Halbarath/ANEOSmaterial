@@ -50,7 +50,8 @@
  *          and strictly increasing, every entry of P, u, s and c finite, the
  *          melt curve finite and >= 0 (SCvH and REOS3 already checked theirs).
  *          An inconsistent unit pair (exactly one of dKpcUnit, dMsolUnit <= 0,
- *          NaN, inf) is fatal; it silently meant cgs. Requires interpBilinear
+ *          NaN, inf) is fatal; it silently meant cgs. New ANEOSIsInTable,
+ *          ANEOSTmin and ANEOSUCold, so that EOSlib no longer reads the axes. Requires interpBilinear
  *          1.0.3 with INTERP_ABI_VERSION 1 (ANEOS_INTERP_*, prefixed: the
  *          unprefixed INTERP_*_REQUIRED clashed with scvheos.h and reos3.h).
  */
@@ -104,6 +105,15 @@
  */
 #define ANEOS_SUCCESS 0
 #define ANEOS_FAIL  -99
+
+/*
+ * Return codes of ANEOSIsInTable besides ANEOS_SUCCESS (the same values as
+ * the other EOS libraries; EOSlib maps them one by one).
+ */
+#define ANEOS_OUTSIDE_RHOMIN -1
+#define ANEOS_OUTSIDE_RHOMAX -2
+#define ANEOS_OUTSIDE_TMIN   -3
+#define ANEOS_OUTSIDE_TMAX   -4
 
 /*
  * Failure contract (the EOSlib convention, shared by all EOS libraries).
@@ -212,6 +222,17 @@ int ANEOSReadStrengthParameters(ANEOSMATERIAL *material, char *inputfile);
 // Access functions
 
 double ANEOSgetRho0(ANEOSMATERIAL *material);
+/* The lowest tabulated temperature (the T(rho, u) fallback), in K. */
+double ANEOSTmin(ANEOSMATERIAL *material);
+/* u(rho, T_min), the cold curve of the table (code units); ANEOS_FAIL_VALUE (counted) outside the table. */
+double ANEOSUCold(ANEOSMATERIAL *material, double rho);
+/*
+ * Table status of (rho, u) (code units): ANEOS_SUCCESS inside the closed table
+ * (edge tolerance ANEOS_EDGE_TOL, as the lookups), otherwise ANEOS_OUTSIDE_RHOMIN
+ * (also for a NaN rho), _RHOMAX, _TMIN (u below u(rho, T_min), also NaN) or _TMAX
+ * (u above u(rho, T_max)). A status query, not a failure: nothing is counted.
+ */
+int ANEOSIsInTable(ANEOSMATERIAL *material, double rho, double u);
 
 double ANEOSTofPU(ANEOSMATERIAL *material, double p, double u);
 double ANEOSTofRhoU(ANEOSMATERIAL *material, double rho, double u);

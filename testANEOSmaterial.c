@@ -854,6 +854,55 @@ static void testUnitPair(int iMat)
     END_TEST();
 }
 
+/*
+ * The accessors EOSlib uses instead of reading the axes: ANEOSTmin, ANEOSUCold and ANEOSIsInTable.
+ * The status must agree with the lookups: inside means T(rho, u) inverts without the T_min
+ * fallback (on an invertible column), outside in rho means the forward lookups fail.
+ */
+static void testIsInTable(ANEOSMATERIAL *m)
+{
+    int failsBefore = nFails;
+    TEST("ANEOSIsInTable, ANEOSUCold, ANEOSTmin");
+    const double rhoMin = m->rhoAxis[0] * m->CGStoCodeUnitsforRho, rhoMax = m->rhoAxis[m->nRho-1] * m->CGStoCodeUnitsforRho;
+    const double TMin = m->TAxis[0], TMax = m->TAxis[m->nT-1];
+    long nf0 = m->nLookupFail;
+
+    CHECK(ANEOSTmin(m) == TMin, "ANEOSTmin");
+    for (int a = 0; a < NSAMPLE_RHO; a += 7) {
+        double rho = sampleRho(m, a);
+        double uc = ANEOSUCold(m, rho), uTop = ANEOSUofRhoT(m, rho, TMax);
+        CHECK(uc == ANEOSUofRhoT(m, rho, TMin), "UCold = u(rho, T_min) at rho=%g", rho);
+        CHECK(ANEOSIsInTable(m, rho, uc) == ANEOS_SUCCESS, "on the cold curve at rho=%g", rho);
+        CHECK(ANEOSIsInTable(m, rho, uTop) == ANEOS_SUCCESS, "on the top row at rho=%g", rho);
+        CHECK(ANEOSIsInTable(m, rho, uc - 1e-6 * fabs(uc) - 1e-6 * fabs(uTop - uc)) == ANEOS_OUTSIDE_TMIN, "below the cold curve at rho=%g", rho);
+        CHECK(ANEOSIsInTable(m, rho, uTop + 1e-6 * fabs(uTop) + 1e-6 * fabs(uTop - uc)) == ANEOS_OUTSIDE_TMAX, "above the top row at rho=%g", rho);
+        CHECK(ANEOSIsInTable(m, rho, NAN) == ANEOS_OUTSIDE_TMIN, "NaN u at rho=%g", rho);
+        /* Inside on an invertible column: T(rho, u) needs no fallback. */
+        for (int b = 0; b < NSAMPLE_T; b += 97) {
+            double T = sampleT(m, b), u = ANEOSUofRhoT(m, rho, T);
+            if (!temperatureInvertible(m, rho, T)) continue;
+            long nf = m->nLookupFail;
+            CHECK(ANEOSIsInTable(m, rho, u) == ANEOS_SUCCESS, "in-table state at rho=%g T=%g", rho, T);
+            ANEOSTofRhoU(m, rho, u);
+            CHECK(m->nLookupFail == nf, "in-table state needed the T fallback at rho=%g T=%g", rho, T);
+        }
+    }
+    /* Edges closed (with the roundoff tolerance), outside beyond. */
+    CHECK(ANEOSIsInTable(m, rhoMin, ANEOSUCold(m, rhoMin)) == ANEOS_SUCCESS, "on rhoMin");
+    CHECK(ANEOSIsInTable(m, rhoMax, ANEOSUCold(m, rhoMax)) == ANEOS_SUCCESS, "on rhoMax");
+    CHECK(m->nLookupFail == nf0, "status queries and in-table lookups counted (%ld -> %ld)", nf0, m->nLookupFail);
+    CHECK(ANEOSIsInTable(m, 0.5 * rhoMin, 1.0) == ANEOS_OUTSIDE_RHOMIN, "below rhoMin");
+    CHECK(ANEOSIsInTable(m, 2.0 * rhoMax, 1.0) == ANEOS_OUTSIDE_RHOMAX, "above rhoMax");
+    CHECK(ANEOSIsInTable(m, NAN, 1.0) == ANEOS_OUTSIDE_RHOMIN, "NaN rho");
+    CHECK(ANEOSIsInTable(m, -1.0, 1.0) == ANEOS_OUTSIDE_RHOMIN, "negative rho");
+    CHECK(m->nLookupFail == nf0, "a status query is not a failure (%ld -> %ld)", nf0, m->nLookupFail);
+    /* UCold outside the table: the sentinel, counted. */
+    CHECK(ANEOSUCold(m, 2.0 * rhoMax) == ANEOS_FAIL_VALUE, "UCold above rhoMax");
+    CHECK(m->nLookupFail == nf0 + 1, "UCold failure counted (%ld -> %ld)", nf0, m->nLookupFail);
+    m->nLookupFail = nf0;
+    END_TEST();
+}
+
 /* ------------------------------------------------------------------- main */
 
 int main(int argc, char *argv[])
@@ -880,6 +929,7 @@ int main(int argc, char *argv[])
     testIsentrope(m);
     testRhoofPU(m);
     testOptionalTables(m);
+    testIsInTable(m);
     testStrengthFileValidation(m);
     testTableValidation();
     testUnitPair(iMat);

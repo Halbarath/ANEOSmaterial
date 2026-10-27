@@ -633,6 +633,46 @@ double ANEOSgetRho0(ANEOSMATERIAL *material)
 }
 
 /*
+ * The lowest tabulated temperature.
+ */
+double ANEOSTmin(ANEOSMATERIAL *material)
+{
+    return material->TAxis[0];
+}
+
+/*
+ * The cold curve of the table, u(rho, T_min).
+ */
+double ANEOSUCold(ANEOSMATERIAL *material, double rho)
+{
+    return ANEOSUofRhoT(material, rho, material->TAxis[0]);
+}
+
+/*
+ * Table status of (rho, u), see ANEOSmaterial.h. One search on the rho axis; the u bounds are the
+ * interpolated first and last rows of that column, i.e. u(rho, T_min) and u(rho, T_max), compared
+ * with the relative tolerance ANEOS_EDGE_TOL (the same rule as the T(rho, u) inversion's table edges).
+ */
+int ANEOSIsInTable(ANEOSMATERIAL *material, double rho, double u)
+{
+    const double rho_cgs = rho*material->CodeUnitstoCGSforRho;
+    const double u_cgs = u*material->CodeUnitstoCGSforU;
+    double w, uMin, uMax;
+    int i;
+
+    switch (interpLocateAxis(material->rhoAxis, material->nRho, rho_cgs, ANEOS_EDGE_TOL, &i, &w)) {
+        case INTERP_SUCCESS: break;
+        case INTERP_ABOVE:   return ANEOS_OUTSIDE_RHOMAX;
+        default:             return ANEOS_OUTSIDE_RHOMIN;   /* below, or NaN */
+    }
+    uMin = interpLineValue(&material->grid, material->uData, INTERP_ALONG_Y, i, w, 0);
+    uMax = interpLineValue(&material->grid, material->uData, INTERP_ALONG_Y, i, w, material->nT - 1);
+    if (!(u_cgs >= uMin - ANEOS_EDGE_TOL*fabs(uMin))) return ANEOS_OUTSIDE_TMIN;   /* also NaN */
+    if (u_cgs > uMax + ANEOS_EDGE_TOL*fabs(uMax)) return ANEOS_OUTSIDE_TMAX;
+    return ANEOS_SUCCESS;
+}
+
+/*
  * Calculates the temperature T(p,u)
  */
 double ANEOSTofPU(ANEOSMATERIAL *material, double p, double u)
