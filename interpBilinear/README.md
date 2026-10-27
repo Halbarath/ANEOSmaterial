@@ -17,9 +17,10 @@ several of them end up in one binary.
   derivatives in that cell;
 * invert the interpolant along one axis at a fixed coordinate on the other
   (T(rho, u), rho(P, T), ...), in two modes: *strict*, which assumes a
-  monotonic line and reports a non-monotonic one, and *scan*, which finds a
-  root on any line and tolerates roundoff at the table edges and on
-  plateaus (what the defect-ridden ANEOS tables need);
+  monotonic line and reports a non-monotonic one, and *tolerant*, which
+  finds a root on any line (bisection first, a scan only as a fallback) and
+  tolerates roundoff at the table edges and on plateaus (what the
+  defect-ridden ANEOS tables need);
 * a nearest-node lookup for integer tables (phase tables);
 * second-order central differences at the nodes of a non-uniform axis, for
   building sound-speed tables;
@@ -43,8 +44,9 @@ inner index `iy` contiguous. In the EOS libraries x is rho and y is T.
 builds and runs `testInterpBilinear`, which needs no table files: it
 checks the arithmetic on synthetic grids (a globally bilinear function
 reproduced to roundoff, inversion round trips in both modes, constructed
-defects producing the documented status codes). The exit status is the
-number of failed checks.
+defects producing the documented status codes), and that the public types
+still have the layout of `INTERP_ABI_VERSION` (see below). The exit status
+is the number of failed checks.
 
 ## Using it from another repository
 
@@ -57,8 +59,44 @@ and later update with
     git subtree pull --prefix=interpBilinear <url-of-this-repo> main --squash
 
 Develop only in this repository, never in a vendored copy, so the copies do
-not diverge. Each consumer records the `INTERP_VERSION_*` it requires and
-checks it at initialisation, the way EOSlib checks its sublibraries.
+not diverge.
+
+### Versions and the type layout
+
+Two numbers describe this header:
+
+* `INTERP_VERSION_MAJOR/MINOR/PATCH` (and `INTERP_VERSION_TEXT`), the
+  release;
+* `INTERP_ABI_VERSION`, the layout of the public types `INTERPGRID`,
+  `INTERPCELL` and `INTERPINVERTOPT`. Bump it whenever one of them changes
+  (a member added, removed, reordered or retyped), together with the layout
+  reference in `testInterpBilinear.c`, which fails until both agree.
+
+The consumers embed `INTERPGRID` in their material structs, and EOSlib
+includes the headers of all of them in one translation unit. The include
+guard lets only the first vendored copy in there, so a consumer cannot rely
+on its own copy being the one in effect. Each consumer header therefore
+checks, at compile time and with names carrying its own prefix (the same
+unprefixed names in three headers would clash):
+
+    #define ANEOS_INTERP_VERSION_MAJOR_REQUIRED 1
+    #define ANEOS_INTERP_VERSION_MINOR_REQUIRED 0
+    #define ANEOS_INTERP_VERSION_PATCH_REQUIRED 3
+    #define ANEOS_INTERP_ABI_VERSION 1
+    #if (INTERP_VERSION_MAJOR * 10000 + INTERP_VERSION_MINOR * 100 + INTERP_VERSION_PATCH) < \
+        (ANEOS_INTERP_VERSION_MAJOR_REQUIRED * 10000 + ANEOS_INTERP_VERSION_MINOR_REQUIRED * 100 + ANEOS_INTERP_VERSION_PATCH_REQUIRED)
+    #error "ANEOSmaterial: the interpBilinear in effect is older than the required version"
+    #endif
+    #if !defined(INTERP_ABI_VERSION) || (INTERP_ABI_VERSION != ANEOS_INTERP_ABI_VERSION)
+    #error "ANEOSmaterial: the interpBilinear in effect has another type layout"
+    #endif
+
+(likewise `SCVHEOS_` and `REOS3_`). The version check is a minimum, the
+layout check is exact: a copy with another layout in the same translation
+unit stops the compilation instead of making EOSlib and the library read
+the same struct differently. After a layout change, pull the new copy into
+every consumer and raise its `*_INTERP_ABI_VERSION` (and the required
+version) in the same commit.
 
 ## License
 

@@ -66,6 +66,9 @@
  *          bScan renamed bFallback: the mode bisects like the strict one and
  *          only scans as a fallback, which the old name suggested otherwise.
  *          No change in behaviour.
+ *   1.0.3  INTERP_ABI_VERSION, the layout version of the public types, so that the
+ *          libraries vendoring this header can detect a copy with another layout in
+ *          the same translation unit (see below). No change in behaviour.
  */
 #ifndef INTERPBILINEAR_HINCLUDED
 #define INTERPBILINEAR_HINCLUDED
@@ -73,10 +76,23 @@
 #include <math.h>
 #include <stddef.h>
 
-#define INTERP_VERSION_TEXT   "1.0.2"
+#define INTERP_VERSION_TEXT   "1.0.3"
 #define INTERP_VERSION_MAJOR  1
 #define INTERP_VERSION_MINOR  0
-#define INTERP_VERSION_PATCH  2
+#define INTERP_VERSION_PATCH  3
+
+/*
+ * Layout version of the public types INTERPGRID, INTERPCELL and INTERPINVERTOPT. Bump it whenever
+ * one of them changes (members, order or types), independently of the version above.
+ *
+ * Several libraries vendor this header (ANEOSmaterial, scvheos, reos3, each as a git subtree) and
+ * embed INTERPGRID in their material structs. EOSlib includes all their headers in one translation
+ * unit, where the include guard lets only the first copy in: every library header therefore
+ * checks that the copy in effect has the minimum version it needs and exactly the layout it was
+ * written for (its <LIB>_INTERP_ABI_VERSION), and stops the compilation otherwise. A copy with a
+ * different layout would make EOSlib and the library disagree on the struct silently.
+ */
+#define INTERP_ABI_VERSION 1
 
 /*
  * Status codes. Everything that is not INTERP_SUCCESS is negative.
