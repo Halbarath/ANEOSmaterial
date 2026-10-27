@@ -667,6 +667,143 @@ static void testStrengthFileValidation(ANEOSMATERIAL *m)
     END_TEST();
 }
 
+/*
+ * Load a table file in a child process. Returns 0 if ANEOSinitMaterialFromFile accepted it, 1 if
+ * it stopped the program (assert(0), or exit(1) with -DNDEBUG), -1 for anything else.
+ */
+static int tableFileRejected(const char *path)
+{
+    fflush(NULL);
+    pid_t pid = fork();
+    if (pid == 0) {
+        if (freopen("/dev/null", "w", stderr) == NULL) _exit(3);   /* the expected diagnostic */
+        ANEOSMATERIAL *t = ANEOSinitMaterialFromFile(54, (char *) path, -1.0, -1.0);
+        ANEOSfinalizeMaterial(t);
+        _exit(0);
+    }
+    int status = 0;
+    if (pid < 0 || waitpid(pid, &status, 0) != pid) return -1;
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) return 0;
+    if ((WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT) || (WIFEXITED(status) && WEXITSTATUS(status) == 1)) return 1;
+    return -1;
+}
+
+/* A small table in the file format of ANEOSinitMaterialFromFile (P, u, s, c stored T-major). */
+#define VT_NRHO 4
+#define VT_NT   3
+struct validTable {
+    double rho0;
+    double rho[VT_NRHO], T[VT_NT];
+    double p[VT_NT][VT_NRHO], u[VT_NT][VT_NRHO], s[VT_NT][VT_NRHO], c[VT_NT][VT_NRHO];
+};
+
+static void validTableInit(struct validTable *t)
+{
+    t->rho0 = 2.0;
+    for (int i = 0; i < VT_NRHO; i++) t->rho[i] = 1.0 + i;
+    for (int j = 0; j < VT_NT; j++) t->T[j] = pow(10.0, 1.0 + j);
+    for (int j = 0; j < VT_NT; j++) for (int i = 0; i < VT_NRHO; i++) {
+        t->p[j][i] = 1e7 * t->rho[i] * t->T[j];
+        t->u[j][i] = 1e7 * t->T[j] + 1e9 * t->rho[i];
+        t->s[j][i] = 1e7 * log(t->T[j]) - 1e7 * log(t->rho[i]) + 1e8;
+        t->c[j][i] = 1e5 * sqrt(t->T[j]);
+    }
+}
+
+static void validTableWrite(const struct validTable *t, const char *path)
+{
+    FILE *fp = fopen(path, "wb");
+    int nRho = VT_NRHO, nT = VT_NT;
+    if (fp == NULL) { perror(path); exit(1); }
+    fwrite(&t->rho0, sizeof(double), 1, fp);
+    fwrite(&nRho, sizeof(int), 1, fp);
+    fwrite(&nT, sizeof(int), 1, fp);
+    fwrite(t->rho, sizeof(double), VT_NRHO, fp);
+    fwrite(t->T, sizeof(double), VT_NT, fp);
+    fwrite(t->p, sizeof(double), VT_NRHO * VT_NT, fp);
+    fwrite(t->u, sizeof(double), VT_NRHO * VT_NT, fp);
+    fwrite(t->s, sizeof(double), VT_NRHO * VT_NT, fp);
+    fwrite(t->c, sizeof(double), VT_NRHO * VT_NT, fp);
+    fclose(fp);
+}
+
+static void meltCurveWrite(const char *path, const double *Tm)
+{
+    FILE *fp = fopen(path, "wb");
+    int nRho = VT_NRHO;
+    if (fp == NULL) { perror(path); exit(1); }
+    fwrite(&nRho, sizeof(int), 1, fp);
+    fwrite(Tm, sizeof(double), VT_NRHO, fp);
+    fclose(fp);
+}
+
+/*
+ * The table is validated at load: rho0 > 0, axes positive and strictly increasing (the
+ * interpBilinear core relies on it), every entry of P, u, s, c finite, the melt curve finite and
+ * >= 0. A defective table stops the run at initialisation instead of producing NaNs later.
+ */
+static void testTableValidation(void)
+{
+    int failsBefore = nFails;
+    TEST("table validation at load");
+    const char *path = "testANEOSmaterial_table.tmp";
+    const char *melt = "testANEOSmaterial_table.tmp_tmelt";
+    struct validTable t;
+
+    /* A valid table loads and evaluates. */
+    validTableInit(&t);
+    validTableWrite(&t, path);
+    CHECK(tableFileRejected(path) == 0, "valid table must be accepted");
+    {
+        ANEOSMATERIAL *v = ANEOSinitMaterialFromFile(54, (char *) path, -1.0, -1.0);
+        CHECK(v->nRho == VT_NRHO && v->nT == VT_NT, "valid table: sizes");
+        CHECK_REL(ANEOSPofRhoT(v, 1.5, 50.0), 1e7 * 1.5 * 50.0, 1e-14, "valid table: bilinear P");
+        ANEOSfinalizeMaterial(v);
+    }
+
+    /* One defect at a time. */
+    for (int k = 0; k < 14; k++) {
+        const char *what = "";
+        validTableInit(&t);
+        switch (k) {
+            case 0:  t.rho0 = 0.0;              what = "rho0 = 0"; break;
+            case 1:  t.rho0 = NAN;              what = "rho0 = NaN"; break;
+            case 2:  t.rho[2] = t.rho[1];       what = "rho axis not strictly increasing"; break;
+            case 3:  t.rho[3] = 0.5;            what = "rho axis decreasing at the end"; break;
+            case 4:  t.rho[0] = 0.0;            what = "rho axis starts at 0"; break;
+            case 5:  t.rho[3] = INFINITY;       what = "rho axis infinite"; break;
+            case 6:  t.T[1] = t.T[2];           what = "T axis not strictly increasing"; break;
+            case 7:  t.T[0] = -1.0;             what = "T axis negative"; break;
+            case 8:  t.T[1] = NAN;              what = "T axis NaN"; break;
+            case 9:  t.p[1][2] = NAN;           what = "P NaN"; break;
+            case 10: t.u[2][3] = INFINITY;      what = "u infinite"; break;
+            case 11: t.s[0][0] = NAN;           what = "s NaN"; break;
+            case 12: t.c[2][0] = -INFINITY;     what = "c -inf"; break;
+            case 13: t.p[2][3] = NAN;           what = "P NaN in the last entry"; break;
+        }
+        validTableWrite(&t, path);
+        CHECK(tableFileRejected(path) == 1, "%s: table must be rejected", what);
+    }
+
+    /* Melt curve: 0 is allowed (no condensed phase), negative or non-finite is not. */
+    validTableInit(&t);
+    validTableWrite(&t, path);
+    {
+        double Tm[VT_NRHO] = {0.0, 1500.0, 2000.0, 2500.0};
+        meltCurveWrite(melt, Tm);
+        CHECK(tableFileRejected(path) == 0, "melt curve with T_melt = 0 must be accepted");
+        Tm[2] = NAN;
+        meltCurveWrite(melt, Tm);
+        CHECK(tableFileRejected(path) == 1, "melt curve with NaN must be rejected");
+        Tm[2] = -1.0;
+        meltCurveWrite(melt, Tm);
+        CHECK(tableFileRejected(path) == 1, "negative melt curve must be rejected");
+    }
+    remove(melt);
+    remove(path);
+    END_TEST();
+}
+
 /* ------------------------------------------------------------------- main */
 
 int main(int argc, char *argv[])
@@ -694,6 +831,7 @@ int main(int argc, char *argv[])
     testRhoofPU(m);
     testOptionalTables(m);
     testStrengthFileValidation(m);
+    testTableValidation();
     testFailureContract(m);   /* last: deliberately increments nLookupFail */
 
     ANEOSfinalizeMaterial(m);

@@ -46,6 +46,9 @@
  *          ANEOSReadStrengthParameters validates the parameters at load (fatal):
  *          finite values, model 0, 1 or 2, and for models 1/2 YM > Y0, mui > 0,
  *          xi > 0, a positive fixed Gamma, and mud >= 0 for model 2.
+ *          The table is validated at load (fatal): rho0 > 0, both axes positive
+ *          and strictly increasing, every entry of P, u, s and c finite, the
+ *          melt curve finite and >= 0 (SCvH and REOS3 already checked theirs).
  */
 #define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1
@@ -104,8 +107,10 @@
  * on stderr only when the library is compiled with -DEOSLIB_VERBOSE
  * (ANEOS_WARN). Test a returned value with ANEOSFailed(x) (true for the
  * sentinel and for NaN); EOSlib exposes the same test as EOSFailed().
- * Errors during initialisation (missing or defective table, unknown
- * material) and a missing melt curve in ANEOSTmeltofRho are fatal.
+ * Errors during initialisation (missing or defective table: short read,
+ * non-positive rho0, axes not positive and strictly increasing, a non-finite
+ * table entry, a negative or non-finite melt curve; unknown material) and a
+ * missing melt curve in ANEOSTmeltofRho are fatal.
  */
 #define ANEOS_FAIL_VALUE (-1e50)
 

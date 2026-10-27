@@ -101,6 +101,41 @@ static void ANEOSReadOrDie(void *ptr, size_t size, size_t n, FILE *file, const c
 }
 
 /*
+ * Validation of a table at load (fatal, like a short read): the interpBilinear core needs
+ * strictly increasing axes, a NaN or inf anywhere in a table would be interpolated into the
+ * neighbouring cells, and rho0, rho and T must be positive (the code <-> cgs conversion and the
+ * T_min fallback of T(rho, u)).
+ */
+static void ANEOSCheckAxis(const double *axis, int n, const char *what, const char *inputfile)
+{
+    for (int i = 0; i < n; i++) {
+        if (!isfinite(axis[i]) || !(axis[i] > 0.0)) {
+            fprintf(stderr, "ANEOSmaterial: %s[%d] = %.15e in %s is not positive and finite.\n", what, i, axis[i], inputfile);
+            assert(0);
+            exit(1);
+        }
+        if (i > 0 && !(axis[i] > axis[i-1])) {
+            fprintf(stderr, "ANEOSmaterial: %s in %s is not strictly increasing at %d (%.15e <= %.15e).\n",
+                    what, inputfile, i, axis[i], axis[i-1]);
+            assert(0);
+            exit(1);
+        }
+    }
+}
+
+static void ANEOSCheckFinite(const double *data, int nRho, int nT, const char *what, const char *inputfile)
+{
+    for (size_t k = 0; k < (size_t)nRho * nT; k++) {
+        if (!isfinite(data[k])) {
+            fprintf(stderr, "ANEOSmaterial: %s in %s has a non-finite entry %g at iRho= %zu iT= %zu.\n",
+                    what, inputfile, data[k], k / nT, k % nT);
+            assert(0);
+            exit(1);
+        }
+    }
+}
+
+/*
  * Allocate a rho-major table: one contiguous block of nRho*nT values plus
  * nRho column pointers into it. Returns the column pointers; the block is
  * returned through *pData so it can be freed.
@@ -151,6 +186,11 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
 
     if (nRho < 2 || nT < 2) {
         fprintf(stderr, "ANEOSinitMaterialFromFile: invalid table size nRho = %d, nT = %d in %s\n", nRho, nT, inputfile);
+        assert(0);
+        exit(1);
+    }
+    if (!isfinite(rho0) || !(rho0 > 0.0)) {
+        fprintf(stderr, "ANEOSinitMaterialFromFile: reference density rho0 = %g in %s is not positive and finite.\n", rho0, inputfile);
         assert(0);
         exit(1);
     }
@@ -218,6 +258,14 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
     ANEOSReadTableTransposed(material->sArray, nRho, nT, tmp, file, "sArray", inputfile);
     ANEOSReadTableTransposed(material->cArray, nRho, nT, tmp, file, "cArray", inputfile);
     free(tmp);
+
+    /* Validate before anything is evaluated (see ANEOSCheckAxis). */
+    ANEOSCheckAxis(rhoAxis, nRho, "rhoAxis", inputfile);
+    ANEOSCheckAxis(TAxis, nT, "TAxis", inputfile);
+    ANEOSCheckFinite(material->pData, nRho, nT, "pArray", inputfile);
+    ANEOSCheckFinite(material->uData, nRho, nT, "uArray", inputfile);
+    ANEOSCheckFinite(material->sData, nRho, nT, "sArray", inputfile);
+    ANEOSCheckFinite(material->cData, nRho, nT, "cArray", inputfile);
 
     /* The material string is optional: older tables end here. */
     size_t nStr = fread(material->matstring, 1, sizeof(material->matstring) - 1, file);
@@ -391,6 +439,15 @@ int ANEOSReadMeltCurve(ANEOSMATERIAL *material, char *inputfile)
     assert(T_melt != NULL);
 
     ANEOSReadOrDie(T_melt, sizeof(T_melt[0]), nRho, file, "T_melt", inputfile);
+
+    /* The melt curve is 0 where there is no condensed phase; negative or non-finite is a defect. */
+    for (int i = 0; i < nRho; i++) {
+        if (!isfinite(T_melt[i]) || !(T_melt[i] >= 0.0)) {
+            fprintf(stderr, "ANEOSReadMeltCurve: T_melt[%d] = %g in %s is negative or not finite.\n", i, T_melt[i], inputfile);
+            assert(0);
+            exit(1);
+        }
+    }
 
     fclose(file);
     material->T_melt = T_melt;
