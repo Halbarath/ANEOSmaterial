@@ -90,6 +90,10 @@
  *          P, c, s and the derivatives can differ from 1.2.0 in the last bits (no
  *          second locate from T); at a node of the T axis the derivatives are taken
  *          in the cell of the inversion, where they could come from the cell above.
+ *          ANEOSisentropicU starts an isentrope from (rho1, u1) above the u column at
+ *          s(rho1, T_max), the top row; it started from s(rho1, T_min) (the T(rho, u)
+ *          fallback), so u2 was the cold curve at rho2 and the thermal energy was lost.
+ *          Below the cold curve it still starts from s(rho1, T_min).
  */
 #define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1

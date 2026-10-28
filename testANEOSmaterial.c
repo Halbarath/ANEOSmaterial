@@ -785,6 +785,47 @@ static void testIsentrope(ANEOSMATERIAL *m)
         m->nLookupFail = nf0;
         NOTE("%d isentropes clamped to the top row, %d to the cold curve", nAbove, nBelow);
     }
+
+    /*
+     * A start point above the u column: the isentrope starts from the top row s(rho1, T_max), the
+     * same isentrope as from u(rho1, T_max) itself, counted once. (Up to ANEOSmaterial 1.2.0 it
+     * started from the T_min fallback, s(rho1, T_min), and u2 was the cold curve at rho2.) The
+     * reference is the isentrope from the top row, a state in the table, and, for rho2 = rho1 on a
+     * column with monotonic s(T), u(rho1, T_max) itself.
+     */
+    {
+        static const double fac[5] = {1.0 / 5.0, 1.0 / 1.2, 1.0, 1.2, 5.0};
+        const double Tmax = m->TAxis[m->nT-1];
+        int nTested = 0;
+        long nf0 = m->nLookupFail;
+        for (int a = 1; a < NSAMPLE_RHO - 1; a += 7) {
+            double rho1 = sampleRho(m, a);
+            double uTop = ANEOSUofRhoT(m, rho1, Tmax);
+            double uHi = uTop + fabs(uTop) + 1.0 * m->CGStoCodeUnitsforU;   /* well above the column */
+            int i1 = interpFindIndex(rho1 * m->CodeUnitstoCGSforRho, m->rhoAxis, m->nRho);
+            long nf = m->nLookupFail;
+            if (ANEOSTofRhoU(m, rho1, uTop) != Tmax || m->nLookupFail != nf) continue;   /* top row not inverted to T_max */
+            m->nLookupFail = nf;
+            CHECK(ANEOSIsInTable(m, rho1, uHi) == ANEOS_OUTSIDE_TMAX, "u above the column at rho=%g", rho1);
+            for (int f = 0; f < 5; f++) {
+                double rho2 = fac[f] * rho1;
+                if (interpLocateAxis(m->rhoAxis, m->nRho, rho2 * m->CodeUnitstoCGSforRho, ANEOS_EDGE_TOL, &(int){0}, &(double){0.0}) != INTERP_SUCCESS) continue;
+                double uRef = ANEOSisentropicU(m, rho1, uTop, rho2);
+                nf = m->nLookupFail;
+                double u2 = ANEOSisentropicU(m, rho1, uHi, rho2);
+                CHECK(m->nLookupFail == nf + 1, "isentrope from above the column counted %ld times (rho=%g->%g)", m->nLookupFail - nf, rho1, rho2);
+                CHECK(!isSentinel(u2), "isentrope from above the column failed (rho=%g->%g)", rho1, rho2);
+                CHECK_REL(u2, uRef, 1e-12, "isentrope from above the column = isentrope from the top row (rho=%g->%g)", rho1, rho2);
+                CHECK(u2 > ANEOSUCold(m, rho2), "isentrope from above the column on the cold curve (rho=%g->%g, u2=%g)", rho1, rho2, u2);
+                if (f == 2 && entropyMonotonicInColumn(m, i1))
+                    CHECK_REL(u2, uTop, 1e-10, "isentrope from above the column to the same rho is the top row (rho=%g)", rho1);
+                nTested++;
+            }
+        }
+        CHECK(nTested > 0, "no isentrope from above the column was tested");
+        m->nLookupFail = nf0;
+        NOTE("%d isentropes started above the u column", nTested);
+    }
     END_TEST();
 }
 

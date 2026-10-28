@@ -1118,10 +1118,18 @@ int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T)
  * u(rho2, TAxis[0]) when S lies below the s(T) line at rho2 (the same
  * convention ANEOSTofRhoU uses for sub-table states), to the top row
  * u(rho2, TAxis[nT-1]) when it lies above (a hot state compressed beyond the
- * table; scvheosIsentropicU does the same). If rho1 is outside the table
- * the cold curve at rho2 is used. A call counts at most once in nLookupFail,
- * however many of these steps fall back. Returns -1e50 only if rho2 itself
- * is outside the table.
+ * table; scvheosIsentropicU does the same).
+ *
+ * The start point is clamped the same way: (rho1, u1) above the u column
+ * starts from s(rho1, T_max), the top row, and (rho1, u1) below the cold curve
+ * (or a NaN u1) from s(rho1, T_min), the T(rho, u) fallback. Up to 1.2.0 both
+ * started from s(rho1, T_min), so a state above the table followed the
+ * coldest isentrope and lost all its thermal energy (the error the top-row
+ * clamp fixed at rho2). The energy above the top row is lost either way.
+ *
+ * If rho1 is outside the table the cold curve at rho2 is used. A call counts
+ * at most once in nLookupFail, however many of these steps fall back. Returns
+ * -1e50 only if rho2 itself is outside the table.
  */
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2)
 {
@@ -1136,6 +1144,18 @@ double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double 
         newT = material->TAxis[0];
         oldS = 0.0;
     } else {
+        /*
+         * u1 not inverted (counted, the only count of a successful locate): the locate fell back
+         * to T_min. Above the column the isentrope starts from the top row instead, by the same
+         * test as ANEOSIsInTable (the tolerant inversion fails only below the column's minimum or
+         * above its maximum, and the top row is not above the maximum). NaN stays at T_min.
+         */
+        if (material->nLookupFail > nLookupFail0 &&
+            u1*material->CodeUnitstoCGSforU > interpLineValue(&material->grid, material->uData, INTERP_ALONG_Y,
+                                                              cell.ix, cell.u, material->nT - 1)) {
+            cell.iy = material->nT - 2;
+            cell.v = 1.0;
+        }
         /* The entropy in the cell of (rho1, u1), then the T of that entropy at rho2. */
         oldS = interpCellValue(&material->grid, material->sData, &cell);
         bClamp = (interpInvertY(&material->grid, material->sData, rho2_cgs, oldS,
