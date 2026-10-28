@@ -99,6 +99,12 @@
  *          non-monotonic line the bisection could also end on another root, which is now the
  *          first node (the lowest-index convention of the tolerant mode). Removing
  *          INTERP_NONMONOTONIC is an API change.
+ *          interpRelaxedLocate (tolerant mode): the node tolerance scans every node, the last
+ *          one included (k < n, it stopped at k < n-1); a hit on node n-1 returns the end of the
+ *          last segment, (n-2, 1). Node n-1 was covered only by the edge band, edgeTol*|g1 - gt|,
+ *          which is far narrower than nodeTol*|g1| where the last segment is nearly flat, so a
+ *          target within nodeTol of the last node value but outside the band gave
+ *          INTERP_NOT_ATTAINED. Otherwise bit-identical.
  */
 #ifndef INTERPBILINEAR_HINCLUDED
 #define INTERPBILINEAR_HINCLUDED
@@ -487,9 +493,19 @@ static inline int interpRelaxedLocate(const INTERPGRID *g, const double *z, int 
     if ((zbelow <= target && target <= g0) || (g0 <= target && target <= zbelow)) { *pk = 0;     *pt = 0.0; return 1; }
     if ((g1 <= target && target <= zabove) || (zabove <= target && target <= g1)) { *pk = n - 2; *pt = 1.0; return 1; }
     if (opt->nodeTol > 0.0) {
-        for (k = 0; k < n - 1; k++) {
+        /*
+         * Every node, the last one included (the scan stopped at n-2). The edge band above does
+         * not cover node n-1 where the last segment is nearly flat: its width edgeTol*|g1 - gt|
+         * can be far below nodeTol*|g1|. (On an exactly flat last segment node n-2 has the same
+         * value and is found first.) Node n-1 is the end of the last segment, (k, t) = (n-2, 1).
+         */
+        for (k = 0; k < n; k++) {
             double gk = interpLineValue(g, z, axis, fixed, w, k);
-            if (fabs(target - gk) <= opt->nodeTol * fmax(fabs(target), fabs(gk))) { *pk = k; *pt = 0.0; return 1; }
+            if (fabs(target - gk) <= opt->nodeTol * fmax(fabs(target), fabs(gk))) {
+                if (k < n - 1) { *pk = k;     *pt = 0.0; }
+                else           { *pk = n - 2; *pt = 1.0; }
+                return 1;
+            }
         }
     }
     return 0;

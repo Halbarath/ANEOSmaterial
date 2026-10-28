@@ -516,7 +516,9 @@ static void testInvertDefects(void)
  *   - strict mode fails for a target outside [f_0, f_n-1] even where a dip or a rise of the line
  *     attains it, tolerant mode finds the lowest-index root there;
  *   - a target equal to f_0 is node 0 in tolerant mode (k = 0, t = 0), also on a non-monotonic line
- *     where the sign bisection would have ended on another root.
+ *     where the sign bisection would have ended on another root;
+ *   - the node tolerance of the tolerant mode covers the last node as well (k = n-2, t = 1), where
+ *     a nearly flat last segment makes the edge band too narrow (up to 1.0.3 the scan skipped it).
  */
 #define LINE_NMAX 64
 static double lineAxisX[2] = { 0.0, 1.0 }, lineAxisY[LINE_NMAX], lineZ[2 * LINE_NMAX];
@@ -582,6 +584,47 @@ static void testInvertLines(void)
         k = -1; t = -1.0;
         CHECK(interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 4.0, &tolerant, &k, &t) == INTERP_SUCCESS && k == 0 && t == 0.0, "tolerant, target f_0, decreasing");
         CHECK(interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 1.0, &tolerant, &k, &t) == INTERP_SUCCESS && k == 2 && t == 1.0, "tolerant, target f_n-1, decreasing");
+    }
+    /*
+     * The node tolerance at the last node. The last segment is nearly flat (span d = 1e-9), so the
+     * edge band edgeTol*d = 1e-13 is far narrower than nodeTol*|f_n-1| = 1e-12. A target 5e-13 beyond
+     * f_n-1 is outside the band and more than nodeTol away from f_n-2: only node n-1 itself is within
+     * the node tolerance. Up to 1.0.3 the node scan stopped at n-2 and the target was not attained.
+     * The result is the end of the last segment, (n-2, 1), as for a target on the last node.
+     */
+    {
+        const double d = 1e-9, e = 5e-13;
+        const double f[4] = { 0.5, 0.8, 1.0 - d, 1.0 }, fd[4] = { 1.0, 1.0 - d, 0.8, 0.5 };
+        INTERPGRID L = makeLine(f, 4);
+        CHECK(tolerant.edgeTol * d < e && e < tolerant.nodeTol * 1.0 && d + e > tolerant.nodeTol * (1.0 + e), "test setup: target outside the edge band, within nodeTol of the last node only");
+        k = -1; t = -1.0;
+        r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 1.0 + e, &tolerant, &k, &t);
+        CHECK(r == INTERP_SUCCESS && k == 2 && t == 1.0, "tolerant, increasing: roundoff above the last node (status %d, k=%d, t=%g)", r, k, t);
+        r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 1.0 - 3.0 * d, &tolerant, &k, &t);
+        CHECK(r == INTERP_SUCCESS && k == 1, "tolerant, increasing: a bracketed target is unchanged (status %d, k=%d)", r, k);
+        r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 1.0 + 1e-10, &tolerant, &k, &t);
+        CHECK(r == INTERP_NOT_ATTAINED, "tolerant, increasing: beyond nodeTol and the band still fails (status %d)", r);
+        /* A steep last segment: the edge band covers the same target, as before. */
+        L = makeLine(fd, 4);
+        k = -1; t = -1.0;
+        r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 0.5 - e, &tolerant, &k, &t);
+        CHECK(r == INTERP_SUCCESS && k == 2 && t == 1.0, "tolerant, decreasing, steep last segment: edge band (status %d, k=%d, t=%g)", r, k, t);
+        /* Mirror image of the first case: a decreasing line ending in a nearly flat segment, target below the last node. */
+        {
+            const double g[4] = { 2.0, 1.5, 1.0 + d, 1.0 };
+            L = makeLine(g, 4);
+            k = -1; t = -1.0;
+            r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 1.0 - e, &tolerant, &k, &t);
+            CHECK(r == INTERP_SUCCESS && k == 2 && t == 1.0, "tolerant, decreasing: roundoff below the last node (status %d, k=%d, t=%g)", r, k, t);
+        }
+        /* The first node, for comparison, was always covered by the scan (k = 0). */
+        {
+            const double h[4] = { 1.0, 1.0 + d, 1.5, 2.0 };
+            L = makeLine(h, 4);
+            k = -1; t = -1.0;
+            r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 1.0 - e, &tolerant, &k, &t);
+            CHECK(r == INTERP_SUCCESS && k == 0 && t == 0.0, "tolerant: roundoff below the first node (status %d, k=%d, t=%g)", r, k, t);
+        }
     }
     /*
      * Random non-monotonic lines (random walks, some with plateaus): every target between the end
