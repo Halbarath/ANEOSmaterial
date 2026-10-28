@@ -186,6 +186,45 @@ static int temperatureInvertible(ANEOSMATERIAL *m, double rho, double T)
     return 1;
 }
 
+/*
+ * Conditioning of the cell that contains (rho, T), cgs: the largest |u|, |P|, |c| at its four nodes
+ * (the scale of the roundoff of an interpolated value, which is a combination of them) and the
+ * slopes du/dT, dP/dT, dc/dT of the cell along T at this density. The tolerances of the round trips
+ * and finite differences below are built from them instead of being fixed: in a cold dense cell the
+ * thermal part of u is a tiny fraction of the cold-curve energy, so roundoff in u is a large error
+ * in T without any defect in the library (the fixed 1e-10 of the T round trip failed ~55000 times on
+ * a synthetic table with cold energy >> thermal energy).
+ */
+typedef struct { double uS, pS, cS, dudT, dPdT, dcdT; } CELLCOND;
+
+static CELLCOND cellConditioning(ANEOSMATERIAL *m, double rho, double T)
+{
+    CELLCOND k;
+    double rho_cgs = rho * m->CodeUnitstoCGSforRho;
+    int i = interpFindIndex(rho_cgs, m->rhoAxis, m->nRho);
+    int j = interpFindIndex(T, m->TAxis, m->nT);
+    double x = (rho_cgs - m->rhoAxis[i]) / (m->rhoAxis[i+1] - m->rhoAxis[i]);
+    double dT = m->TAxis[j+1] - m->TAxis[j];
+#define NODEMAX(A) fmax(fmax(fabs((A)[i][j]), fabs((A)[i][j+1])), fmax(fabs((A)[i+1][j]), fabs((A)[i+1][j+1])))
+#define SLOPE_T(A) (((1.0 - x) * ((A)[i][j+1] - (A)[i][j]) + x * ((A)[i+1][j+1] - (A)[i+1][j])) / dT)
+    k.uS = NODEMAX(m->uArray); k.pS = NODEMAX(m->pArray); k.cS = NODEMAX(m->cArray);
+    k.dudT = SLOPE_T(m->uArray); k.dPdT = SLOPE_T(m->pArray); k.dcdT = SLOPE_T(m->cArray);
+#undef NODEMAX
+#undef SLOPE_T
+    return k;
+}
+
+/*
+ * Absolute tolerance on T(rho, u(rho, T)) - T: the roundoff of u in the cell (a few ulps of its
+ * largest node, through the code-unit conversion and the interpolation) divided by du/dT, plus the
+ * roundoff of T itself. Needs du/dT > 0 (an invertible state).
+ */
+static double temperatureRoundTripTol(const CELLCOND *k, double T)
+{
+    /* 32 ulps: the largest error measured on the M-ANEOS and synthetic tables is ~2.6 ulps of k->uS / dudT. */
+    return 16.0 * DBL_EPSILON * T + 32.0 * DBL_EPSILON * k->uS / fabs(k->dudT);
+}
+
 /* The same for s(T): 1 if s(rho, T) is attained only in its own T cell on the line s(rho, .), so
  * that the isentrope to the same density must come back to T. */
 static int entropyInvertible(ANEOSMATERIAL *m, double rho, double T)
@@ -346,10 +385,19 @@ static void testTemperatureInversion(ANEOSMATERIAL *m)
         }
         double u = ANEOSUofRhoT(m, rho, T);
         double T2 = ANEOSTofRhoU(m, rho, u);
-        CHECK_REL(T2, T, 1e-10, "T roundtrip at rho=%g", rho);
-        /* P(rho,u) must agree with P(rho,T) at the recovered T. */
-        CHECK_NEAR(ANEOSPofRhoU(m, rho, u), ANEOSPofRhoT(m, rho, T), 1e-10, pressureScale(m, rho, T), "P(rho,u) vs P(rho,T) at rho=%g T=%g", rho, T);
-        CHECK_REL(ANEOSCofRhoU(m, rho, u), ANEOSCofRhoT(m, rho, T), 1e-10, "c(rho,u) vs c(rho,T) at rho=%g T=%g", rho, T);
+        /*
+         * The round trip is limited by the roundoff of u in the cell divided by du/dT (see
+         * cellConditioning); P and c at the recovered T differ from those at T by that error times
+         * dP/dT and dc/dT, plus their own roundoff. Up to 1.2.0 these were fixed (1e-10).
+         */
+        const CELLCOND k = cellConditioning(m, rho, T);
+        const double tolT = temperatureRoundTripTol(&k, T);
+        CHECK(fabs(T2 - T) <= tolT, "T roundtrip at rho=%g T=%g: %.17g (error %.3e > %.3e)", rho, T, T2, fabs(T2 - T), tolT);
+        /* P(rho,u) and c(rho,u) must agree with P(rho,T) and c(rho,T) at the recovered T. */
+        CHECK(fabs(ANEOSPofRhoU(m, rho, u) - ANEOSPofRhoT(m, rho, T)) <= (64.0 * DBL_EPSILON * k.pS + fabs(k.dPdT) * tolT) * m->CGStoCodeUnitsforP,
+              "P(rho,u) vs P(rho,T) at rho=%g T=%g: %.17g vs %.17g", rho, T, ANEOSPofRhoU(m, rho, u), ANEOSPofRhoT(m, rho, T));
+        CHECK(fabs(ANEOSCofRhoU(m, rho, u) - ANEOSCofRhoT(m, rho, T)) <= (64.0 * DBL_EPSILON * k.cS + fabs(k.dcdT) * tolT) * m->CGStoCodeUnitsforC,
+              "c(rho,u) vs c(rho,T) at rho=%g T=%g: %.17g vs %.17g", rho, T, ANEOSCofRhoU(m, rho, u), ANEOSCofRhoT(m, rho, T));
     }
     /* T(rho,P): P(T) at fixed rho may have plateaus, so check consistency of P, not T. */
     for (int a = 0; a < NSAMPLE_RHO; a++) for (int b = 0; b < NSAMPLE_T; b++) {
@@ -584,38 +632,48 @@ static void testDerivatives(ANEOSMATERIAL *m)
     int failsBefore = nFails;
     int nSkipped = 0;
     TEST("analytic derivatives match the interpolant");
-    /* Inside a cell the interpolant is bilinear, so central differences with a
-     * step that stays inside the cell are exact for the partials at fixed T
-     * and fixed rho, and P is linear in u at fixed rho. */
+    /*
+     * Inside a cell the interpolant is bilinear, so central differences with a step that stays inside
+     * the cell are exact for the partials at fixed T and fixed rho, and P is linear in u at fixed rho:
+     * what is left is roundoff, the roundoff of P (a few ulps of the cell's largest |P|) divided by the
+     * step. That is the tolerance, with a relative floor of 1e-10. Up to 1.2.0 the tolerances were
+     * fixed (1e-8, 1e-6) and failed where |P| at the nodes is large next to its change across 1% of
+     * the cell (cold energy >> thermal energy).
+     */
     for (int i = 1; i < m->nRho - 2; i += (m->nRho - 3) / 8 + 1)
         for (int j = 1; j < m->nT - 2; j += (m->nT - 3) / 8 + 1) {
             double rho = cellRho(m, i), T = cellT(m, j);
             double hr = 0.01 * (m->rhoAxis[i+1] - m->rhoAxis[i]) * m->CGStoCodeUnitsforRho;
             double hT = 0.01 * (m->TAxis[j+1] - m->TAxis[j]);
 
+            const CELLCOND k = cellConditioning(m, rho, T);
+            const double pS = k.pS * m->CGStoCodeUnitsforP, uS = k.uS * m->CGStoCodeUnitsforU;
+            const double epsP = 64.0 * DBL_EPSILON * pS;   /* roundoff of one interpolated P */
+
             double dPdRhoT = ANEOSdPdRhoofRhoT(m, rho, T);
             double fd = (ANEOSPofRhoT(m, rho + hr, T) - ANEOSPofRhoT(m, rho - hr, T)) / (2 * hr);
-            CHECK_REL(dPdRhoT, fd, 1e-8, "dP/drho|T in cell (%d,%d)", i, j);
+            CHECK(fabs(dPdRhoT - fd) <= 1e-10 * fabs(dPdRhoT) + epsP / hr, "dP/drho|T in cell (%d,%d): %.15g vs %.15g", i, j, dPdRhoT, fd);
 
             double dPdT = ANEOSdPdTofRhoT(m, rho, T);
             fd = (ANEOSPofRhoT(m, rho, T + hT) - ANEOSPofRhoT(m, rho, T - hT)) / (2 * hT);
-            CHECK_REL(dPdT, fd, 1e-8, "dP/dT|rho in cell (%d,%d)", i, j);
+            CHECK(fabs(dPdT - fd) <= 1e-10 * fabs(dPdT) + epsP / hT, "dP/dT|rho in cell (%d,%d): %.15g vs %.15g", i, j, dPdT, fd);
 
             /* The (rho, u) derivatives go through T(rho,u). Where u(T) is not
              * invertible at this rho (several roots, table defect) the root
              * that comes back depends on roundoff and may lie in a cell with
              * du/dT <= 0, so those states are skipped like in the other tests.
-             * Where it is invertible, the 1e-10 round-trip error of T is
-             * amplified where du/dT is small (cold cells), so the tolerance is
-             * looser than for the fixed-T partials. A cell with du/dT <= 0 on
-             * an otherwise invertible line gives the documented sentinel. */
+             * A cell with du/dT <= 0 on an otherwise invertible line gives the
+             * documented sentinel. */
             if (!temperatureInvertible(m, rho, T)) { nSkipped++; continue; }
             double u = ANEOSUofRhoT(m, rho, T);
             double up = ANEOSUofRhoT(m, rho, T + hT), um = ANEOSUofRhoT(m, rho, T - hT);
             double dPdU = ANEOSdPdUofRhoU(m, rho, u);
             if (up > um) {
+                /* Roundoff of the two P and of the step up - um itself (a few ulps of the cell's |u|). */
                 fd = (ANEOSPofRhoU(m, rho, up) - ANEOSPofRhoU(m, rho, um)) / (up - um);
-                CHECK_REL(dPdU, fd, 1e-6, "dP/du|rho in cell (%d,%d)", i, j);
+                const double epsU = 64.0 * DBL_EPSILON * uS;
+                CHECK(fabs(dPdU - fd) <= 1e-10 * fabs(dPdU) + (2.0 * epsP + fabs(dPdU) * 2.0 * epsU) / (up - um),
+                      "dP/du|rho in cell (%d,%d): %.15g vs %.15g", i, j, dPdU, fd);
             } else {
                 CHECK(isSentinel(dPdU), "dP/du|rho with du/dT <= 0 in cell (%d,%d) = %g", i, j, dPdU);
             }
@@ -628,8 +686,11 @@ static void testDerivatives(ANEOSMATERIAL *m)
             double Tp = ANEOSTofRhoU(m, rho + hr, u), Tm = ANEOSTofRhoU(m, rho - hr, u);
             if (!isSentinel(dPdRhoU) &&
                 Tp >= m->TAxis[j] && Tp < m->TAxis[j+1] && Tm >= m->TAxis[j] && Tm < m->TAxis[j+1]) {
+                /* P(rho, u) at constant u is not linear in rho (T moves with rho): truncation error,
+                 * relative 1e-6 for the 1% step, plus the roundoff of P and of T(rho, u) times dP/dT. */
                 fd = (ANEOSPofRhoU(m, rho + hr, u) - ANEOSPofRhoU(m, rho - hr, u)) / (2 * hr);
-                CHECK_REL(dPdRhoU, fd, 1e-6, "dP/drho|u in cell (%d,%d)", i, j);
+                const double epsPu = epsP + fabs(k.dPdT) * temperatureRoundTripTol(&k, T) * m->CGStoCodeUnitsforP;
+                CHECK(fabs(dPdRhoU - fd) <= 1e-6 * fabs(dPdRhoU) + 2.0 * epsPu / (2 * hr), "dP/drho|u in cell (%d,%d): %.15g vs %.15g", i, j, dPdRhoU, fd);
             }
 
             CHECK_REL(ANEOSdUdRhoofRhoU(m, rho, u), ANEOSPofRhoU(m, rho, u) / (rho * rho), 1e-14, "du/drho in cell (%d,%d)", i, j);
