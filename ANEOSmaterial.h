@@ -67,6 +67,9 @@
  *          u(rho2, T_max), like scvheosIsentropicU; it was clamped to the cold curve
  *          like one leaving at the bottom, which dropped the thermal energy of a hot
  *          compressed state.
+ *          A strength file with yieldStrengthModel 1 or 2 but no _tmelt file is fatal at
+ *          load; the model was set to -1 (no strength) silently. Model 0 (no limiter)
+ *          needs no melt curve and stays 0 (it became -1 as well).
  */
 #define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1
@@ -145,7 +148,8 @@
  * sentinel and for NaN); EOSlib exposes the same test as EOSFailed().
  * Errors during initialisation (missing or defective table: short read,
  * non-positive rho0, axes not positive and strictly increasing, a non-finite
- * table entry, a negative or non-finite melt curve; unknown material) and a
+ * table entry, a negative or non-finite melt curve, an invalid strength file,
+ * strength model 1 or 2 without a melt curve; unknown material) and a
  * missing melt curve in ANEOSTmeltofRho are fatal.
  */
 #define ANEOS_FAIL_VALUE (-1e50)
@@ -208,7 +212,7 @@ typedef struct ANEOSmaterial
     double *T_melt;
 
     // Yield parameters (optional)
-    int yieldStrengthModel;
+    int yieldStrengthModel;   // -1 no strength file, 0 no limiter, 1 intact, 2 damaged (1, 2 need T_melt)
     double Y0; // Yield strength at 0 pressure
     double YM; // Yield strength at infinite pressure
     double mui; // coefficient of internal friction for intact material

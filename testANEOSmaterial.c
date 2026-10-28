@@ -744,7 +744,8 @@ static void testOptionalTables(ANEOSMATERIAL *m)
     }
 
     if (m->T_melt == NULL) {
-        CHECK(m->yieldStrengthModel < 0, "strength model %d without melt curve", m->yieldStrengthModel);
+        /* Models 1 and 2 need the melt curve (fatal at load without it); model 0 does not. */
+        CHECK(m->yieldStrengthModel <= 0, "strength model %d without melt curve", m->yieldStrengthModel);
     } else {
         double rLo = 0.5 * m->rhoAxis[0] * m->CGStoCodeUnitsforRho;
         double rHi = 2.0 * m->rhoAxis[m->nRho-1] * m->CGStoCodeUnitsforRho;
@@ -979,6 +980,57 @@ static void testTableValidation(void)
         Tm[2] = -1.0;
         meltCurveWrite(melt, Tm);
         CHECK(tableFileRejected(path) == 1, "negative melt curve must be rejected");
+    }
+    remove(melt);
+
+    /*
+     * Strength file and melt curve: models 1 and 2 soften with T/T_melt, so a strength file for
+     * them without a _tmelt file is fatal (it silently became model -1, no strength, up to
+     * ANEOSmaterial 1.2.0 before this fix). Model 0 (no limiter) needs no melt curve and keeps
+     * its model (it became -1 as well). Without a strength file the model is -1.
+     */
+    {
+        const char *strength = "testANEOSmaterial_table.tmp_strength";
+        static const struct { const char *text; int model; } st[] = {
+            {"yieldStrengthModel = 0\nY0 = 1e8\nYM = 1e8\nmui = 0\nxi = 0\nGamma = 0\n", 0},
+            {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1},
+            {"yieldStrengthModel = 2\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nmud = 0.6\nxi = 1.2\nGamma = -1\n", 2},
+        };
+        double Tm[VT_NRHO] = {0.0, 1500.0, 2000.0, 2500.0};
+        ANEOSMATERIAL *v;
+
+        /* No strength file, with and without a melt curve: model -1. */
+        remove(strength);
+        v = ANEOSinitMaterialFromFile(54, (char *) path, -1.0, -1.0);
+        CHECK(v->yieldStrengthModel == -1, "no strength file, no melt curve: model %d, expected -1", v->yieldStrengthModel);
+        ANEOSfinalizeMaterial(v);
+        meltCurveWrite(melt, Tm);
+        v = ANEOSinitMaterialFromFile(54, (char *) path, -1.0, -1.0);
+        CHECK(v->yieldStrengthModel == -1, "no strength file, melt curve: model %d, expected -1", v->yieldStrengthModel);
+        ANEOSfinalizeMaterial(v);
+
+        for (int k = 0; k < 3; k++) {
+            writeFile(strength, st[k].text);
+
+            /* With a melt curve every model loads and keeps its number. */
+            meltCurveWrite(melt, Tm);
+            CHECK(tableFileRejected(path) == 0, "model %d with melt curve must be accepted", st[k].model);
+            v = ANEOSinitMaterialFromFile(54, (char *) path, -1.0, -1.0);
+            CHECK(v->yieldStrengthModel == st[k].model, "model %d with melt curve read as %d", st[k].model, v->yieldStrengthModel);
+            ANEOSfinalizeMaterial(v);
+
+            /* Without: models 1 and 2 stop the run, model 0 loads and stays 0. */
+            remove(melt);
+            if (st[k].model >= 1) {
+                CHECK(tableFileRejected(path) == 1, "model %d without melt curve must be rejected", st[k].model);
+            } else {
+                CHECK(tableFileRejected(path) == 0, "model 0 without melt curve must be accepted");
+                v = ANEOSinitMaterialFromFile(54, (char *) path, -1.0, -1.0);
+                CHECK(v->yieldStrengthModel == 0, "model 0 without melt curve read as %d, expected 0", v->yieldStrengthModel);
+                ANEOSfinalizeMaterial(v);
+            }
+        }
+        remove(strength);
     }
     remove(melt);
     remove(path);

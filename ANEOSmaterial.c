@@ -305,8 +305,19 @@ ANEOSMATERIAL *ANEOSinitMaterialFromFile(int iMat, char *inputfile, double dKpcU
         //fprintf(stderr, "No strength parameters found.\n");
     }
 
-    if (material->yieldStrengthModel >= 0 && material->T_melt == NULL) {
-        material->yieldStrengthModel = -1;
+    /*
+     * Models 1 and 2 soften the strength with T/T_melt, so a strength file that asks for them
+     * without a melt curve is a misconfigured material: stop here, like a bad strength file
+     * (ANEOSReadStrengthParameters), instead of running it without strength. Up to 1.2.0 the
+     * model was set to -1 silently, for model 0 too, which needs no melt curve and keeps its
+     * meaning (no limiter, not "no yield stress"). Without a strength file the model is -1.
+     */
+    if (material->yieldStrengthModel >= 1 && material->T_melt == NULL) {
+        fprintf(stderr, "ANEOSinitMaterialFromFile: %s_strength sets yieldStrengthModel = %d, which needs "
+                "the melt curve %s_tmelt, but that file was not found.\n",
+                inputfile, material->yieldStrengthModel, inputfile);
+        assert(0);
+        exit(1);
     }
 
     return material;
