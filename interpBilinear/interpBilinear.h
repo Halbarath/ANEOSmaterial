@@ -87,6 +87,18 @@
  *          with one tol are unchanged (tolAbs = 0); the types and
  *          INTERP_ABI_VERSION are unchanged. New API: when the version is bumped
  *          (1.1.0), scvheos and reos3, which call the *Tol variants, must require it.
+ *          interpInvertLine: the check for a non-bracketing segment after the strict
+ *          bisection is gone, and with it INTERP_NONMONOTONIC (-7): it could not fire. The
+ *          strict bisection keeps f_lo <= target <= f_hi on any line, monotonic or not, so it
+ *          always ends on a bracketing segment and returns a root; on a non-monotonic line
+ *          that is the root the bisection lands on (the comments, and the scvheos and reos3
+ *          documentation built on them, said such a line fails). Strict mode: results
+ *          bit-identical. Tolerant mode: a target equal to the first node value returns that
+ *          node at once (k = 0, t = 0). On a monotonic line that is what it gave before, after
+ *          the sign bisection had moved away to n-2 and the O(n) scan found the node; on a
+ *          non-monotonic line the bisection could also end on another root, which is now the
+ *          first node (the lowest-index convention of the tolerant mode). Removing
+ *          INTERP_NONMONOTONIC is an API change.
  */
 #ifndef INTERPBILINEAR_HINCLUDED
 #define INTERPBILINEAR_HINCLUDED
@@ -123,8 +135,8 @@
 #define INTERP_BELOW         -5   /* interpLocateAxis: below the first node;
                                      interpInvertLine (strict): target below the first node value */
 #define INTERP_ABOVE         -6   /* ... above the last one */
-#define INTERP_NONMONOTONIC  -7   /* interpInvertLine (strict): the located segment does not bracket the target */
-#define INTERP_NOT_ATTAINED  -8   /* interpInvertLine (scan): no segment attains the target */
+                                  /* -7 unused (was INTERP_NONMONOTONIC, never returned) */
+#define INTERP_NOT_ATTAINED  -8   /* interpInvertLine (tolerant): no segment attains the target */
 #define INTERP_INVALID       -9   /* a NaN input */
 
 #define INTERP_ALONG_X 0   /* vary ix at fixed (iy, v) */
@@ -147,23 +159,29 @@ typedef struct interpCell {
 /*
  * Options of interpInvertLine.
  *
- * Both modes start with a bisection on the node index, O(log n); they
- * differ in what happens when the bisection cannot bracket the target.
+ * Both modes search by bisection on the node index, O(log n). A bisection
+ * whose end nodes bracket the target keeps a bracketing segment at every
+ * step, on any line, monotonic or not, so it always ends on a root (on a
+ * non-monotonic line on the one it bisects onto, which need not be the
+ * lowest). The modes differ in what happens when the end nodes do not
+ * bracket the target, which on a non-monotonic line does not mean that the
+ * target is not attained (a dip below f_0, a rise above f_n-1):
  *
- *   bFallback 0: strict mode. The line is assumed to increase monotonically
- *                and a monotone bisection finds the segment. A target
- *                outside [f_0, f_n-1] fails with INTERP_BELOW/INTERP_ABOVE,
- *                a segment that does not bracket the target (which only
- *                happens on a non-monotonic line) with INTERP_NONMONOTONIC.
- *             1: tolerant mode. If the end nodes bracket the target, a sign
- *                bisection finds a bracketing segment on any line, monotonic
- *                or not, and that is the whole search in the normal case.
- *                Only if the end nodes do not bracket the target, or the
- *                bisection ends in a non-bracketing segment (both need a
- *                non-monotonic line), does it fall back to a linear scan for
- *                the lowest-index bracketing segment, and if none brackets
- *                the target exactly, to the edge and node tolerances below,
- *                before INTERP_NOT_ATTAINED.
+ *   bFallback 0: strict mode, for lines that increase in the normal case.
+ *                The end nodes must bracket the target, f_0 <= target <=
+ *                f_n-1: a target below fails with INTERP_BELOW, above with
+ *                INTERP_ABOVE, also where a non-monotonic line attains it
+ *                inside. A target between them always gives a root.
+ *             1: tolerant mode, for lines of either direction and for
+ *                defective tables. If the end nodes bracket the target, a
+ *                sign bisection finds a root, and that is the whole search
+ *                in the normal case; a target equal to f_0 is that node.
+ *                Only if the end nodes do not bracket the target (which
+ *                needs a non-monotonic line, or a target off the line) does
+ *                it fall back to a linear scan for the lowest-index
+ *                bracketing segment, and if none brackets the target
+ *                exactly, to the edge and node tolerances below, before
+ *                INTERP_NOT_ATTAINED.
  *   valTol    relative roundoff tolerance on the target at the line ends: a
  *             target within valTol*(1 + |target|) outside [f_0, f_n-1] is
  *             clamped onto the nearer end instead of failing (both modes).
@@ -486,9 +504,14 @@ static inline int interpRelaxedLocate(const INTERPGRID *g, const double *z, int 
  * segment (f_k == f_k+1 == target) t = 0, the lower node. When several roots
  * exist the result depends on the path: the bisection returns the root it
  * bisects onto (normally the one in the monotonic bulk of the line), the
- * scan fallback of the tolerant mode the lowest-index one.
+ * scan fallback of the tolerant mode the lowest-index one. Neither mode
+ * detects a non-monotonic line (that would take O(n) per call); the libraries
+ * report such lines of their tables once, at initialisation.
  *
- * Returns INTERP_SUCCESS with *pk, *pt; INTERP_INVALID for a NaN target.
+ * Returns INTERP_SUCCESS with *pk, *pt; INTERP_BELOW/INTERP_ABOVE (strict) or
+ * INTERP_NOT_ATTAINED (tolerant) if the target is not found; INTERP_INVALID
+ * for a NaN target. The bracket invariant needs finite line values, which
+ * the libraries guarantee by validating their tables at load.
  */
 static inline int interpInvertLine(const INTERPGRID *g, const double *z, int axis, int fixed, double w,
                                    double target, const INTERPINVERTOPT *opt, int *pk, double *pt)
@@ -514,7 +537,10 @@ static inline int interpInvertLine(const INTERPGRID *g, const double *z, int axi
     }
 
     if (!opt->bFallback) {
-        /* Strict mode: f increasing in k, bisection on the node index. */
+        /*
+         * Strict mode: the end nodes must bracket the target. The bisection keeps
+         * flo <= target < fhi (or target == fhi == g1), so it ends on a root.
+         */
         if (!(target >= g0)) return INTERP_BELOW;
         if (!(target <= g1)) return INTERP_ABOVE;
         while (hi - lo > 1) {
@@ -523,20 +549,26 @@ static inline int interpInvertLine(const INTERPGRID *g, const double *z, int axi
             if (fm <= target) { lo = mid; flo = fm; }
             else              { hi = mid; fhi = fm; }
         }
-        if (!(flo <= target) || !(target <= fhi)) return INTERP_NONMONOTONIC;
     } else {
-        int bracketed = 0;
-        if ((g0 < target) != (g1 < target) || g0 == target || g1 == target) {
-            /* End nodes bracket the target: sign bisection, valid on any line. */
+        /*
+         * The first node itself: the lowest-index root. The sign bisection below
+         * needs flo != target and would move away from it (to n-2, then the scan).
+         */
+        if (g0 == target) { *pk = 0; *pt = 0.0; return INTERP_SUCCESS; }
+        if ((g0 < target) != (g1 < target) || g1 == target) {
+            /*
+             * End nodes bracket the target: sign bisection, valid on any line. flo
+             * stays strictly on the side of g0, fhi on the other side or at the
+             * target, so the segment [lo, hi] brackets the target at the end.
+             */
             while (hi - lo > 1) {
                 int mid = lo + (hi - lo) / 2;
                 double fm = interpLineValue(g, z, axis, fixed, w, mid);
                 if ((fm < target) == (flo < target) && fm != target) { lo = mid; flo = fm; }
                 else                                                 { hi = mid; fhi = fm; }
             }
-            bracketed = (flo <= target && target <= fhi) || (fhi <= target && target <= flo);
-        }
-        if (!bracketed) {
+        } else {
+            /* Not bracketed by the end nodes: lowest-index bracketing segment, then the tolerances. */
             if (!interpScanLine(g, z, axis, fixed, w, n, target, &lo, &flo, &fhi)) {
                 if (interpRelaxedLocate(g, z, axis, fixed, w, n, target, opt, pk, pt)) return INTERP_SUCCESS;
                 return INTERP_NOT_ATTAINED;
