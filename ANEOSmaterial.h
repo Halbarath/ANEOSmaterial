@@ -82,6 +82,8 @@
  *          the first and last row only and reported OUTSIDE_TMIN for states the lookup
  *          finds: within edgeTol of the cold curve, and below u(rho, T_min) on columns
  *          whose cold rows have du/dT < 0 (M-ANEOS), so EOSIsUsable rejected them.
+ *          ANEOS_N_MATERIAL_MAX is 101, the largest id plus one (an array of 100 entries
+ *          indexed by iMat overflowed by one for id 100).
  *          P, c, s and the derivatives can differ from 1.2.0 in the last bits (no
  *          second locate from T); at a node of the T axis the derivatives are taken
  *          in the cell of the inversion, where they could come from the cell above.
@@ -128,7 +130,12 @@
 #define MAT_MANEOS_SERPENTINE 65
 #define MAT_MANEOS_WATER      66
 
-#define ANEOS_N_MATERIAL_MAX 100
+/*
+ * Size of an array indexed by the ANEOS material id (up to 100, MAT_ANEOS_MAX in EOSlib.h), i.e.
+ * the largest id plus one, as TILL_N_MATERIAL_MAX. It was 100, the largest id itself, so that
+ * such an array overflowed by one. Loop over ids with iMat < ANEOS_N_MATERIAL_MAX.
+ */
+#define ANEOS_N_MATERIAL_MAX 101
 
 /*
  * Status codes (EOSlib convention: 0 is success, -99 a generic failure;
