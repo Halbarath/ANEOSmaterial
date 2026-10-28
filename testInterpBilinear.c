@@ -445,8 +445,9 @@ static void testInvertDefects(void)
     CHECK(interpNodeLineMonotonic(&G, zDip, INTERP_ALONG_X, 9) != 0, "dip visible along x at iy = 9");
 
     /* Targets in the dip region are attained three times on the node line
-     * (u = 0 at ix = 10). Tolerant mode must return a segment that reproduces
-     * the target; strict mode either does so or reports NONMONOTONIC. */
+     * (u = 0 at ix = 10). Both modes must return a segment that reproduces the
+     * target: the end nodes bracket it, and a bisection keeps a bracketing
+     * segment on any line (strict mode cannot detect the defect). */
     {
         double zlo = zDip[10 * NY + 10], zhi = zDip[10 * NY + 8];   /* dip bottom .. dip top */
         int m;
@@ -460,10 +461,10 @@ static void testInvertDefects(void)
                 /* The fallback convention: lowest-index root unless the sign bisection landed first. */
             }
             r = interpInvertLine(&G, zDip, INTERP_ALONG_Y, 10, 0.0, target, &strict, &k, &t);
-            CHECK(r == INTERP_SUCCESS || r == INTERP_NONMONOTONIC, "strict on dip: status %d", r);
+            CHECK(r == INTERP_SUCCESS, "strict on dip: status %d", r);
             if (r == INTERP_SUCCESS) {
                 double f = (1 - t) * interpLineValue(&G, zDip, INTERP_ALONG_Y, 10, 0.0, k) + t * interpLineValue(&G, zDip, INTERP_ALONG_Y, 10, 0.0, k + 1);
-                CHECK_REL(f, target, 1e-13, "strict on dip reproduces target when it succeeds");
+                CHECK_REL(f, target, 1e-13, "strict on dip reproduces target");
             }
         }
     }
@@ -502,6 +503,126 @@ static void testInvertDefects(void)
         CHECK(interpInvertLine(&G, zMono, INTERP_ALONG_Y, 3, 0.0, g0 - 0.5 * tolerant.edgeTol * span, &strict, &k, &t) == INTERP_BELOW, "strict has no edge tolerance");
         double gn = zMono[3 * NY + NY - 1], gm = zMono[3 * NY + NY - 2];
         CHECK(interpInvertLine(&G, zMono, INTERP_ALONG_Y, 3, 0.0, gn + 0.5 * tolerant.edgeTol * (gn - gm), &tolerant, &k, &t) == INTERP_SUCCESS && k == NY - 2 && t == 1.0, "top edge overshoot within tolerance");
+    }
+    END_TEST();
+}
+
+/*
+ * Inversion on short hand-made lines (a 2 x n grid with two equal node columns, so the line is the
+ * node column itself) and on random non-monotonic lines:
+ *   - a bisection whose end nodes bracket the target always ends on a root, in both modes and on
+ *     any line (up to 1.0.3 a strict-mode check for a non-bracketing segment, INTERP_NONMONOTONIC,
+ *     could never fire);
+ *   - strict mode fails for a target outside [f_0, f_n-1] even where a dip or a rise of the line
+ *     attains it, tolerant mode finds the lowest-index root there;
+ *   - a target equal to f_0 is node 0 in tolerant mode (k = 0, t = 0), also on a non-monotonic line
+ *     where the sign bisection would have ended on another root.
+ */
+#define LINE_NMAX 64
+static double lineAxisX[2] = { 0.0, 1.0 }, lineAxisY[LINE_NMAX], lineZ[2 * LINE_NMAX];
+
+static INTERPGRID makeLine(const double *f, int n)
+{
+    INTERPGRID L = { 2, n, lineAxisX, lineAxisY };
+    int j;
+    for (j = 0; j < n; j++) { lineAxisY[j] = j; lineZ[j] = f[j]; lineZ[n + j] = f[j]; }
+    return L;
+}
+
+static double lineAt(const INTERPGRID *L, int k, double t)
+{
+    return (1.0 - t) * interpLineValue(L, lineZ, INTERP_ALONG_Y, 0, 0.0, k) + t * interpLineValue(L, lineZ, INTERP_ALONG_Y, 0, 0.0, k + 1);
+}
+
+static void testInvertLines(void)
+{
+    int failsBefore = nFails;
+    static const INTERPINVERTOPT strict = INTERP_INVERT_STRICT;
+    static const INTERPINVERTOPT tolerant = INTERP_INVERT_TOLERANT;
+    int k = 0, r, n;
+    double t = 0.0;
+    TEST("inversion: bracket invariant, dips outside the end nodes, f_0");
+
+    /* A dip below f_0 right after the first node: attained only there. */
+    {
+        static const double f[5] = { 1.0, 0.5, 2.0, 3.0, 4.0 };
+        INTERPGRID L = makeLine(f, 5);
+        CHECK(interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 0.75, &strict, &k, &t) == INTERP_BELOW, "strict: target only in a dip below f_0");
+        r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 0.75, &tolerant, &k, &t);
+        CHECK(r == INTERP_SUCCESS && k == 0 && fabs(t - 0.5) < 1e-15, "tolerant: lowest-index root in the dip (status %d, k=%d, t=%g)", r, k, t);
+        /* Between f_0 and the top of the line: both find a root. */
+        CHECK(interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 1.5, &strict, &k, &t) == INTERP_SUCCESS && fabs(lineAt(&L, k, t) - 1.5) < 1e-15, "strict above f_0");
+    }
+    /* A rise above f_n-1 before the end: strict fails, tolerant finds it. */
+    {
+        static const double f[5] = { 0.0, 1.0, 5.0, 2.0, 3.0 };
+        INTERPGRID L = makeLine(f, 5);
+        CHECK(interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 4.0, &strict, &k, &t) == INTERP_ABOVE, "strict: target only in a rise above f_n-1");
+        r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 4.0, &tolerant, &k, &t);
+        CHECK(r == INTERP_SUCCESS && k == 1 && fabs(lineAt(&L, k, t) - 4.0) < 1e-15, "tolerant: root in the rise (status %d, k=%d)", r, k);
+    }
+    /* Target equal to f_0. */
+    {
+        /* Non-monotonic: the sign bisection would move away from node 0 and end on the 3 -> 0.5 crossing. */
+        static const double f[5] = { 1.0, 3.0, 0.5, 2.0, 4.0 };
+        INTERPGRID L = makeLine(f, 5);
+        k = -1; t = -1.0;
+        CHECK(interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 1.0, &tolerant, &k, &t) == INTERP_SUCCESS && k == 0 && t == 0.0,
+              "tolerant, target f_0 on a non-monotonic line: k=%d t=%g", k, t);
+        CHECK(interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 1.0, &strict, &k, &t) == INTERP_SUCCESS && lineAt(&L, k, t) == 1.0,
+              "strict, target f_0 on a non-monotonic line: a root");
+    }
+    {
+        static const double f[4] = { 1.0, 2.0, 3.0, 4.0 }, d[4] = { 4.0, 3.0, 2.0, 1.0 };
+        INTERPGRID L = makeLine(f, 4);
+        k = -1; t = -1.0;
+        CHECK(interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 1.0, &tolerant, &k, &t) == INTERP_SUCCESS && k == 0 && t == 0.0, "tolerant, target f_0, increasing");
+        CHECK(interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 1.0, &strict, &k, &t) == INTERP_SUCCESS && k == 0 && t == 0.0, "strict, target f_0, increasing");
+        L = makeLine(d, 4);
+        k = -1; t = -1.0;
+        CHECK(interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 4.0, &tolerant, &k, &t) == INTERP_SUCCESS && k == 0 && t == 0.0, "tolerant, target f_0, decreasing");
+        CHECK(interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 1.0, &tolerant, &k, &t) == INTERP_SUCCESS && k == 2 && t == 1.0, "tolerant, target f_n-1, decreasing");
+    }
+    /*
+     * Random non-monotonic lines (random walks, some with plateaus): every target between the end
+     * nodes is a root in both modes; every target outside them fails in strict mode with the right
+     * code, and in tolerant mode is either found exactly or reported INTERP_NOT_ATTAINED.
+     */
+    {
+        int nBetween = 0, nOutside = 0;
+        for (n = 0; n < 20000; n++) {
+            double f[LINE_NMAX], lo, hi, target;
+            int m = 2 + (int) (frand() * (LINE_NMAX - 2)), j, bPlateau = (n % 5 == 0);
+            INTERPGRID L;
+            f[0] = frand();
+            for (j = 1; j < m; j++) f[j] = bPlateau ? f[j-1] + floor(3.0 * frand()) - 1.0 : f[j-1] + frand() - 0.4;
+            L = makeLine(f, m);
+            lo = fmin(f[0], f[m-1]); hi = fmax(f[0], f[m-1]);
+            target = (n % 3 == 0) ? f[(int) (frand() * m)] : lo - 1.0 + (hi - lo + 2.0) * frand();
+            /* Strict mode clamps a target within valTol*(1 + |target|) outside [min, max] of the end nodes onto that end. */
+            const double eps = strict.valTol * (1.0 + fabs(target));
+            const double tc = (target < lo && target >= lo - eps) ? lo : (target > hi && target <= hi + eps) ? hi : target;
+            if (f[0] <= tc && tc <= f[m-1]) {
+                nBetween++;
+                r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, target, &strict, &k, &t);
+                CHECK(r == INTERP_SUCCESS && fabs(lineAt(&L, k, t) - target) <= 1e-12 * (1.0 + fabs(target)), "strict, end nodes bracket: status %d (line %d)", r, n);
+            } else {
+                nOutside++;
+                r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, target, &strict, &k, &t);
+                CHECK(r == (tc < f[0] ? INTERP_BELOW : INTERP_ABOVE), "strict, end nodes do not bracket: status %d (line %d)", r, n);
+            }
+            r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, target, &tolerant, &k, &t);
+            if (lo <= target && target <= hi)
+                CHECK(r == INTERP_SUCCESS && fabs(lineAt(&L, k, t) - target) <= 1e-12 * (1.0 + fabs(target)), "tolerant, end nodes bracket: status %d (line %d)", r, n);
+            else
+                CHECK(r == INTERP_NOT_ATTAINED || (r == INTERP_SUCCESS && fabs(lineAt(&L, k, t) - target) <= 1e-4 * (1.0 + fabs(target))),
+                      "tolerant, end nodes do not bracket: status %d (line %d)", r, n);
+            if (target == f[0]) {
+                r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, target, &tolerant, &k, &t);
+                CHECK(r == INTERP_SUCCESS && k == 0 && t == 0.0, "tolerant, target f_0: k=%d t=%g (line %d)", k, t, n);
+            }
+        }
+        CHECK(nBetween > 1000 && nOutside > 1000, "random lines: %d bracketed, %d not", nBetween, nOutside);
     }
     END_TEST();
 }
@@ -587,6 +708,7 @@ int main(void)
     testNearest();
     testInvertRoundTrip();
     testInvertDefects();
+    testInvertLines();
     testNodeDeriv();
 
     printf("%d checks, %d failed\n", nChecks, nFails);

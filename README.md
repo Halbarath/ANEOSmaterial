@@ -16,11 +16,8 @@ several of them end up in one binary.
   at the edges, see below), evaluate the bilinear interpolant and its two
   partial derivatives in that cell;
 * invert the interpolant along one axis at a fixed coordinate on the other
-  (T(rho, u), rho(P, T), ...), in two modes: *strict*, which assumes a
-  monotonic line and reports a non-monotonic one, and *tolerant*, which
-  finds a root on any line (bisection first, a scan only as a fallback) and
-  tolerates roundoff at the table edges and on plateaus (what the
-  defect-ridden ANEOS tables need);
+  (T(rho, u), rho(P, T), ...) by bisection on the node index, in two modes
+  (see below);
 * a nearest-node lookup for integer tables (phase tables);
 * second-order central differences at the nodes of a non-uniform axis, for
   building sound-speed tables;
@@ -36,6 +33,29 @@ contract.
 
 Layout: a table is one contiguous block, x-major, `z[ix*ny + iy]`, with the
 inner index `iy` contiguous. In the EOS libraries x is rho and y is T.
+
+## Inversion
+
+Both modes bisect on the node index, O(log n). A bisection whose end nodes
+bracket the target keeps a bracketing segment at every step, on any line,
+monotonic or not, so it always ends on a root. The modes differ only where
+the end nodes do not bracket the target:
+
+* **strict** (`INTERP_INVERT_STRICT`, scvheos and reos3): the target must lie
+  in `[f_0, f_n-1]`, otherwise `INTERP_BELOW` or `INTERP_ABOVE`, also where a
+  dip or a rise of a non-monotonic line attains it inside;
+* **tolerant** (`INTERP_INVERT_TOLERANT`, ANEOSmaterial): a sign bisection
+  for lines of either direction; only if the end nodes do not bracket the
+  target does it scan for the lowest-index bracketing segment, then apply
+  the edge and plateau tolerances, before `INTERP_NOT_ATTAINED`. A target
+  equal to `f_0` is node 0.
+
+Neither mode detects a non-monotonic line (that would cost O(n) per call):
+there it returns a root, which need not be the physical one. The consumers
+report such lines of their tables once at initialisation
+(`interpNodeLineMonotonic`). Up to 1.0.3 the header declared
+`INTERP_NONMONOTONIC` for strict mode, but the bisection can never end on a
+non-bracketing segment, so it was never returned; it is gone.
 
 ## Edge tolerance
 
@@ -83,7 +103,8 @@ tolerance above applies to the coordinate that is located first.
 builds and runs `testInterpBilinear`, which needs no table files: it
 checks the arithmetic on synthetic grids (a globally bilinear function
 reproduced to roundoff, inversion round trips in both modes, constructed
-defects producing the documented status codes), the edge tolerance band on
+defects producing the documented status codes, the bracket invariant on random
+non-monotonic lines), the edge tolerance band on
 the kinds of axis the consumers use (a linear axis starting at 1e-25, log
 axes with a bound at 0, a log axis shifted to 0 by a unit conversion), that
 the single-`tol` functions equal the `*Tol` variants with `tolAbs = 0`, and
