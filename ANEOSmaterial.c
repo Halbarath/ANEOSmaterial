@@ -660,27 +660,37 @@ double ANEOSUCold(ANEOSMATERIAL *material, double rho)
 }
 
 /*
- * Table status of (rho, u), see ANEOSmaterial.h. One search on the rho axis; the u bounds are the
- * interpolated first and last rows of that column, i.e. u(rho, T_min) and u(rho, T_max), compared
- * with the relative tolerance ANEOS_EDGE_TOL (the same rule as the T(rho, u) inversion's table edges).
+ * Table status of (rho, u), see ANEOSmaterial.h: exactly whether the (rho, u) lookups find the state
+ * without the T_min fallback. The density is located with the same tolerance, and the u column at
+ * rho is inverted by the same tolerant inversion as in ANEOSLocateRhoU (not counted: a status query
+ * is not a failure). If the inversion fails, u lies below the minimum or above the maximum of the
+ * column (the tolerant mode tries every segment and the edge tolerance), and since the top row is
+ * not above the maximum, u > u(rho, T_max) means above the table, anything else below.
+ *
+ * Up to 1.2.0 the status compared u with the first and last row of the column only. That disagreed
+ * with the lookup in two ways: the tolerant inversion clamps states up to edgeTol (1e-4) of the
+ * first cell's u span below the cold curve onto it, and on a column whose cold rows have du/dT < 0
+ * (the M-ANEOS tables, below about 60 K) it finds states below u(rho, T_min) at a lower T of the
+ * line. For both the status said ANEOS_OUTSIDE_TMIN, so EOSIsUsable rejected a state the lookup
+ * evaluates without a fallback.
  */
 int ANEOSIsInTable(ANEOSMATERIAL *material, double rho, double u)
 {
     const double rho_cgs = rho*material->CodeUnitstoCGSforRho;
     const double u_cgs = u*material->CodeUnitstoCGSforU;
-    double w, uMin, uMax;
-    int i;
+    double w, v;
+    int i, k;
 
     switch (interpLocateAxis(material->rhoAxis, material->nRho, rho_cgs, ANEOS_EDGE_TOL, &i, &w)) {
         case INTERP_SUCCESS: break;
         case INTERP_ABOVE:   return ANEOS_OUTSIDE_RHOMAX;
         default:             return ANEOS_OUTSIDE_RHOMIN;   /* below, or NaN */
     }
-    uMin = interpLineValue(&material->grid, material->uData, INTERP_ALONG_Y, i, w, 0);
-    uMax = interpLineValue(&material->grid, material->uData, INTERP_ALONG_Y, i, w, material->nT - 1);
-    if (!(u_cgs >= uMin - ANEOS_EDGE_TOL*fabs(uMin))) return ANEOS_OUTSIDE_TMIN;   /* also NaN */
-    if (u_cgs > uMax + ANEOS_EDGE_TOL*fabs(uMax)) return ANEOS_OUTSIDE_TMAX;
-    return ANEOS_SUCCESS;
+    if (interpInvertLine(&material->grid, material->uData, INTERP_ALONG_Y, i, w, u_cgs,
+                         &ANEOSInvertOpt, &k, &v) == INTERP_SUCCESS) return ANEOS_SUCCESS;
+    if (u_cgs > interpLineValue(&material->grid, material->uData, INTERP_ALONG_Y, i, w, material->nT - 1))
+        return ANEOS_OUTSIDE_TMAX;
+    return ANEOS_OUTSIDE_TMIN;   /* below the column, or NaN */
 }
 
 /*

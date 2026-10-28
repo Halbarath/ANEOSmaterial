@@ -1116,9 +1116,12 @@ static void testUnitPair(int iMat)
 
 /*
  * The accessors EOSlib uses instead of reading the axes: ANEOSTmin, ANEOSUCold and ANEOSIsInTable.
- * The status must agree with the lookups: inside means T(rho, u) inverts without the T_min
- * fallback (on an invertible column), outside in rho means the forward lookups fail.
+ * The status must agree with the lookups exactly: inside means T(rho, u) inverts without the T_min
+ * fallback, outside in rho means the forward lookups fail.
  */
+/* The inversion options of ANEOSmaterial (INTERP_INVERT_TOLERANT, static in the library). */
+static const INTERPINVERTOPT ANEOSInvertOptForTest = INTERP_INVERT_TOLERANT;
+
 static void testIsInTable(ANEOSMATERIAL *m)
 {
     int failsBefore = nFails;
@@ -1134,8 +1137,22 @@ static void testIsInTable(ANEOSMATERIAL *m)
         CHECK(uc == ANEOSUofRhoT(m, rho, TMin), "UCold = u(rho, T_min) at rho=%g", rho);
         CHECK(ANEOSIsInTable(m, rho, uc) == ANEOS_SUCCESS, "on the cold curve at rho=%g", rho);
         CHECK(ANEOSIsInTable(m, rho, uTop) == ANEOS_SUCCESS, "on the top row at rho=%g", rho);
-        CHECK(ANEOSIsInTable(m, rho, uc - 1e-6 * fabs(uc) - 1e-6 * fabs(uTop - uc)) == ANEOS_OUTSIDE_TMIN, "below the cold curve at rho=%g", rho);
-        CHECK(ANEOSIsInTable(m, rho, uTop + 1e-6 * fabs(uTop) + 1e-6 * fabs(uTop - uc)) == ANEOS_OUTSIDE_TMAX, "above the top row at rho=%g", rho);
+        /* Below the whole u(T) column: on M-ANEOS tables with du/dT < 0 at the cold rows the column
+         * minimum lies below u(rho, T_min), and states between the two are inside (see below). */
+        {
+            double uLineMin = uc;
+            for (int j = 1; j < m->nT; j++) uLineMin = fmin(uLineMin, ANEOSUofRhoT(m, rho, m->TAxis[j]));
+            double u1 = ANEOSUofRhoT(m, rho, m->TAxis[1]);
+            double uBelow = uLineMin - 2.0 * ANEOSInvertOptForTest.edgeTol * fabs(u1 - uc) - 1e-6 * fabs(uLineMin) - 1e-6 * fabs(uTop - uc);
+            CHECK(ANEOSIsInTable(m, rho, uBelow) == ANEOS_OUTSIDE_TMIN, "below the column at rho=%g", rho);
+        }
+        /* Above the top row by more than the inversion's edge band (edgeTol of the last cell's u span),
+         * within which the lookup clamps the state onto T_max and finds it. */
+        {
+            double uLast = ANEOSUofRhoT(m, rho, m->TAxis[m->nT-2]);
+            double uAbove = uTop + 2.0 * ANEOSInvertOptForTest.edgeTol * fabs(uTop - uLast) + 1e-6 * fabs(uTop) + 1e-6 * fabs(uTop - uc);
+            CHECK(ANEOSIsInTable(m, rho, uAbove) == ANEOS_OUTSIDE_TMAX, "above the top row at rho=%g", rho);
+        }
         CHECK(ANEOSIsInTable(m, rho, NAN) == ANEOS_OUTSIDE_TMIN, "NaN u at rho=%g", rho);
         /* Inside on an invertible column: T(rho, u) needs no fallback. */
         for (int b = 0; b < NSAMPLE_T; b += 97) {
@@ -1146,6 +1163,40 @@ static void testIsInTable(ANEOSMATERIAL *m)
             ANEOSTofRhoU(m, rho, u);
             CHECK(m->nLookupFail == nf, "in-table state needed the T fallback at rho=%g T=%g", rho, T);
         }
+    }
+    /*
+     * The status is exactly what the lookup sees: inside if and only if T(rho, u) needs no T_min
+     * fallback, and a state the lookup does not find is below or above the table as the fallback
+     * side says. Sampled densely around the cold curve, where up to 1.2.0 the status said
+     * OUTSIDE_TMIN for states the tolerant inversion finds: within edgeTol (1e-4) of the first cell's
+     * u span below the cold curve, and below u(rho, T_min) on columns with du/dT < 0 at the cold rows
+     * (about a quarter of these states on the M-ANEOS tables). Also around the top row.
+     */
+    {
+        long nDisagree = 0, nInsideBelowCold = 0, nStates = 0;
+        for (int a = 0; a < NSAMPLE_RHO; a += 3) {
+            double rho = sampleRho(m, a);
+            double uc = ANEOSUCold(m, rho), uTop = ANEOSUofRhoT(m, rho, TMax), span = fabs(uTop - uc);
+            double cell0 = ANEOSUofRhoT(m, rho, m->TAxis[1]) - uc;
+            for (int b = -60; b <= 60; b++) {
+                double us[3] = { uc + 1e-5 * span * b, uc + 3e-6 * cell0 * b, uTop + 1e-6 * span * b };
+                for (int q = 0; q < 3; q++) {
+                    long nf = m->nLookupFail;
+                    int st = ANEOSIsInTable(m, rho, us[q]);
+                    CHECK(m->nLookupFail == nf, "status query counted at rho=%g", rho);
+                    ANEOSTofRhoU(m, rho, us[q]);
+                    int bFound = (m->nLookupFail == nf);
+                    m->nLookupFail = nf;
+                    nStates++;
+                    if ((st == ANEOS_SUCCESS) != bFound) nDisagree++;
+                    if (!bFound) CHECK(st == ANEOS_OUTSIDE_TMIN || st == ANEOS_OUTSIDE_TMAX, "not found, status %d at rho=%g", st, rho);
+                    if (st == ANEOS_OUTSIDE_TMAX) CHECK(us[q] > uTop, "OUTSIDE_TMAX below the top row at rho=%g", rho);
+                    if (st == ANEOS_SUCCESS && us[q] < uc) nInsideBelowCold++;
+                }
+            }
+        }
+        CHECK(nDisagree == 0, "status and lookup disagree for %ld of %ld states around the cold curve and the top row", nDisagree, nStates);
+        if (nInsideBelowCold) NOTE("%ld of %ld states below u(rho, T_min) are inside (edge tolerance, du/dT < 0 at the cold rows)", nInsideBelowCold, nStates);
     }
     /* Edges closed (with the roundoff tolerance), outside beyond. */
     CHECK(ANEOSIsInTable(m, rhoMin, ANEOSUCold(m, rhoMin)) == ANEOS_SUCCESS, "on rhoMin");

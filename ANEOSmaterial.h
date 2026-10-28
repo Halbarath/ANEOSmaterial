@@ -77,6 +77,11 @@
  *          instead of two, and a call counts at most once in nLookupFail (a density
  *          outside the table counted twice, in the isentrope up to three times; the
  *          derivatives also counted a T fallback onto a cold row with du/dT <= 0 twice).
+ *          ANEOSIsInTable reports a state inside exactly when the (rho, u) lookups find
+ *          it without the T_min fallback (it runs the same inversion). It compared u with
+ *          the first and last row only and reported OUTSIDE_TMIN for states the lookup
+ *          finds: within edgeTol of the cold curve, and below u(rho, T_min) on columns
+ *          whose cold rows have du/dT < 0 (M-ANEOS), so EOSIsUsable rejected them.
  *          P, c, s and the derivatives can differ from 1.2.0 in the last bits (no
  *          second locate from T); at a node of the T axis the derivatives are taken
  *          in the cell of the inversion, where they could come from the cell above.
@@ -255,10 +260,12 @@ double ANEOSTmin(ANEOSMATERIAL *material);
 /* u(rho, T_min), the cold curve of the table (code units); ANEOS_FAIL_VALUE (counted) outside the table. */
 double ANEOSUCold(ANEOSMATERIAL *material, double rho);
 /*
- * Table status of (rho, u) (code units): ANEOS_SUCCESS inside the closed table
- * (edge tolerance ANEOS_EDGE_TOL, as the lookups), otherwise ANEOS_OUTSIDE_RHOMIN
- * (also for a NaN rho), _RHOMAX, _TMIN (u below u(rho, T_min), also NaN) or _TMAX
- * (u above u(rho, T_max)). A status query, not a failure: nothing is counted.
+ * Table status of (rho, u) (code units), exactly as the (rho, u) lookups see the
+ * state: ANEOS_SUCCESS if T(rho, u) is found without the T_min fallback (the same
+ * edge tolerance and the same tolerant inversion), otherwise ANEOS_OUTSIDE_RHOMIN
+ * (also for a NaN rho), _RHOMAX, _TMIN (u below the u(T) column at rho, also NaN)
+ * or _TMAX (u above it). On a column with du/dT < 0 at the cold rows a u below
+ * u(rho, T_min) can be inside. A status query, not a failure: nothing is counted.
  */
 int ANEOSIsInTable(ANEOSMATERIAL *material, double rho, double u);
 
