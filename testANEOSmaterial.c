@@ -1007,6 +1007,17 @@ static void testFailureContract(ANEOSMATERIAL *m)
         nf = m->nLookupFail;
         (void) ANEOSisentropicU(m, rhoHi, 1.0, rhoHi);
         CHECK(m->nLookupFail == nf + 1, "isentrope with rho1 and rho2 above rhoMax counted %ld times", m->nLookupFail - nf);
+        /* rho1 outside the table: no entropy, the sentinel (up to 1.2.0 the cold curve at rho2), counted once. */
+        {
+            const double rhoIn = sampleRho(m, NSAMPLE_RHO / 2), uIn = ANEOSUofRhoT(m, rhoIn, sampleT(m, NSAMPLE_T / 2));
+            const double rhoLo = 0.5 * m->rhoAxis[0] * m->CGStoCodeUnitsforRho;
+            const double rho1s[3] = { rhoHi, rhoLo, NAN };
+            for (int q = 0; q < 3; q++) {
+                nf = m->nLookupFail;
+                CHECK(ANEOSisentropicU(m, rho1s[q], uIn, rhoIn) == ANEOS_FAIL_VALUE, "isentrope from rho1= %g outside the table", rho1s[q]);
+                CHECK(m->nLookupFail == nf + 1, "isentrope from rho1= %g outside the table counted %ld times", rho1s[q], m->nLookupFail - nf);
+            }
+        }
         CHECK(ANEOSdPdRhoofRhoU(m, rhoHi, 1.0) == ANEOS_FAIL_VALUE, "dPdRho(rho, u) above rhoMax");
         CHECK(ANEOSdPdUofRhoU(m, rhoHi, 1.0) == ANEOS_FAIL_VALUE, "dPdU(rho, u) above rhoMax");
     }

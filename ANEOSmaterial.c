@@ -1127,9 +1127,11 @@ int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T)
  * coldest isentrope and lost all its thermal energy (the error the top-row
  * clamp fixed at rho2). The energy above the top row is lost either way.
  *
- * If rho1 is outside the table the cold curve at rho2 is used. A call counts
- * at most once in nLookupFail, however many of these steps fall back. Returns
- * -1e50 only if rho2 itself is outside the table.
+ * Returns ANEOS_FAIL_VALUE (-1e50) if rho1 or rho2 is outside the table (or
+ * not a number), like every other (rho, u) function and scvheosIsentropicU:
+ * without rho1 there is no entropy. Up to 1.2.0 rho1 outside the table gave
+ * the cold curve at rho2, a finite u2 that looked like a result. A call
+ * counts at most once in nLookupFail, however many of these steps fall back.
  */
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2)
 {
@@ -1140,9 +1142,8 @@ double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double 
     INTERPCELL cell;
 
     if (ANEOSLocateRhoU(material, __func__, rho1, u1, &cell, &oldT)) {
-        /* rho1 outside the table (counted): no entropy, so the cold curve at rho2. */
-        newT = material->TAxis[0];
-        oldS = 0.0;
+        /* rho1 outside the table (counted once, in the locate): no entropy, no isentrope. */
+        return ANEOS_FAIL_VALUE;
     } else {
         /*
          * u1 not inverted (counted, the only count of a successful locate): the locate fell back

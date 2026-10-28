@@ -94,6 +94,9 @@
  *          s(rho1, T_max), the top row; it started from s(rho1, T_min) (the T(rho, u)
  *          fallback), so u2 was the cold curve at rho2 and the thermal energy was lost.
  *          Below the cold curve it still starts from s(rho1, T_min).
+ *          ANEOSisentropicU returns ANEOS_FAIL_VALUE for rho1 outside the table, as the failure
+ *          contract says and as scvheosIsentropicU does; it returned the cold curve at rho2, a
+ *          finite value that a caller could not tell from a result.
  */
 #define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1
@@ -320,6 +323,12 @@ int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T);
 // for a rho that is not positive and finite.
 double ANEOSTmeltofRho(ANEOSMATERIAL *material, double rho);
 
+/*
+ * u2 on the isentrope through (rho1, u1) at rho2. Clamped to the table edge where the isentrope
+ * leaves the table at rho2 (cold curve below, top row above); (rho1, u1) above the u column starts
+ * from the top row, below the cold curve from the cold curve. ANEOS_FAIL_VALUE if rho1 or rho2 is
+ * outside the table. Counted once per call.
+ */
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2);
 
 /* Entropy: returned in cgs (erg/g/K) as tabulated, not converted to code units. */
