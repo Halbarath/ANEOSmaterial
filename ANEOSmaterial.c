@@ -1445,9 +1445,11 @@ double ANEOSGammaofRhoT(ANEOSMATERIAL *material, double rho, double T) {
 void ANEOSPrintMat(ANEOSMATERIAL *material, FILE *fp)
 {
     fprintf(fp,"# Material: %i (%s)\n", material->iMat, material->matName);
-    fprintf(fp,"# Reference density rho0 (cgs units): %g\n", material->rho0);
+    /* rho0 and the axes are stored in cgs (the lookups convert at the interface). */
+    fprintf(fp,"# Reference density rho0 (cgs units): %g g/cc\n", material->rho0);
     fprintf(fp,"# Table size: nRho = %d, nT = %d\n", material->nRho, material->nT);
-    fprintf(fp,"# Table boundaries (cgs units): minRho = %g, maxRho = %g, minT = %g, maxT = %g\n",material->rhoAxis[0],material->rhoAxis[material->nRho-1],material->TAxis[0],material->TAxis[material->nT-1]);
+    fprintf(fp,"# Table boundaries (cgs units): minRho = %g g/cc, maxRho = %g g/cc, minT = %g K, maxT = %g K\n",
+            material->rhoAxis[0], material->rhoAxis[material->nRho-1], material->TAxis[0], material->TAxis[material->nT-1]);
     fprintf(fp,"# %s\n",material->matstring);
     fprintf(fp,"# Failed lookups and fallbacks (nLookupFail): %ld\n", material->nLookupFail);
 }
