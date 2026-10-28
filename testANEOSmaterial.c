@@ -721,6 +721,18 @@ static void testFailureContract(ANEOSMATERIAL *m)
         CHECK(ANEOSPofUT(m, u, T) == ANEOSPofRhoT(m, ANEOSRhoofUT(m, u, T), T), "PofUT = P(rho(u, T), T)");
         CHECK(m->nLookupFail == nf + 3, "successful chained lookups counted (%ld)", m->nLookupFail - nf);
     }
+    /*
+     * The (rho, u) derivatives return exactly the sentinel, on both sides of the table. du/drho
+     * divided the sentinel by rho^2 up to 1.2.0: -1e50/rho^2 is not the sentinel, and for
+     * rho > 1e5 (code units) not even ANEOSFailed. The failure is counted in P(rho, u).
+     */
+    {
+        CHECK(ANEOSdUdRhoofRhoU(m, rhoHi, 1.0) == ANEOS_FAIL_VALUE, "dUdRho above rhoMax = %g", ANEOSdUdRhoofRhoU(m, rhoHi, 1.0));
+        CHECK(ANEOSdUdRhoofRhoU(m, rhoLo, 1.0) == ANEOS_FAIL_VALUE, "dUdRho below rhoMin = %g", ANEOSdUdRhoofRhoU(m, rhoLo, 1.0));
+        CHECK(ANEOSdUdRhoofRhoU(m, 1e6, 1.0) == ANEOS_FAIL_VALUE, "dUdRho at rho = 1e6 (code units) = %g", ANEOSdUdRhoofRhoU(m, 1e6, 1.0));
+        CHECK(ANEOSdPdRhoofRhoU(m, rhoHi, 1.0) == ANEOS_FAIL_VALUE, "dPdRho(rho, u) above rhoMax");
+        CHECK(ANEOSdPdUofRhoU(m, rhoHi, 1.0) == ANEOS_FAIL_VALUE, "dPdU(rho, u) above rhoMax");
+    }
     /* Gamma with failed sound speed. */
     if (!m->fixedGamma) CHECK(ANEOSGammaofRhoT(m, rhoHi, 300.0) == ANEOS_FAIL_VALUE, "Gamma with failed c");
 

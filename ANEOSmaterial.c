@@ -1255,11 +1255,15 @@ double ANEOSdPdUofRhoU(ANEOSMATERIAL *material, double rho, double u)
 
 /*
  * du/drho along an isentrope (code units): du/drho|_S = P/rho^2.
+ * Returns ANEOS_FAIL_VALUE if P(rho, u) fails (counted there, not again). Up to 1.2.0 the
+ * sentinel was divided by rho^2: -1e50/rho^2 is not the sentinel, and for rho > 1e5 (code
+ * units) not even ANEOSFailed.
  */
 double ANEOSdUdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
-    double dUdRho = ANEOSPofRhoU(material, rho, u)/(rho*rho);
-    return dUdRho;
+    double P = ANEOSPofRhoU(material, rho, u);
+    if (ANEOSFailed(P)) return ANEOS_FAIL_VALUE;
+    return P/(rho*rho);
 }
 
 /*

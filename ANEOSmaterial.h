@@ -70,6 +70,8 @@
  *          A strength file with yieldStrengthModel 1 or 2 but no _tmelt file is fatal at
  *          load; the model was set to -1 (no strength) silently. Model 0 (no limiter)
  *          needs no melt curve and stays 0 (it became -1 as well).
+ *          ANEOSdUdRhoofRhoU returns ANEOS_FAIL_VALUE for a failed P (it returned
+ *          -1e50/rho^2, which is not the sentinel and for rho > 1e5 not ANEOSFailed).
  */
 #define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1
