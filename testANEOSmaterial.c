@@ -186,6 +186,28 @@ static int temperatureInvertible(ANEOSMATERIAL *m, double rho, double T)
     return 1;
 }
 
+/* The same for s(T): 1 if s(rho, T) is attained only in its own T cell on the line s(rho, .), so
+ * that the isentrope to the same density must come back to T. */
+static int entropyInvertible(ANEOSMATERIAL *m, double rho, double T)
+{
+    double rho_cgs = rho * m->CodeUnitstoCGSforRho;
+    int i = interpFindIndex(rho_cgs, m->rhoAxis, m->nRho);
+    int jT = interpFindIndex(T, m->TAxis, m->nT);
+    double x = (rho_cgs - m->rhoAxis[i]) / (m->rhoAxis[i+1] - m->rhoAxis[i]);
+    double y = (T - m->TAxis[jT]) / (m->TAxis[jT+1] - m->TAxis[jT]);
+    double hlo = (1.0 - x) * m->sArray[i][jT]   + x * m->sArray[i+1][jT];
+    double hhi = (1.0 - x) * m->sArray[i][jT+1] + x * m->sArray[i+1][jT+1];
+    double S = hlo + y * (hhi - hlo);
+    if (!(hlo < S && S < hhi)) return 0;
+    double hprev = (1.0 - x) * m->sArray[i][0] + x * m->sArray[i+1][0];
+    for (int j = 0; j < m->nT - 1; j++) {
+        double hnext = (1.0 - x) * m->sArray[i][j+1] + x * m->sArray[i+1][j+1];
+        if (j != jT && fmin(hprev, hnext) <= S && S <= fmax(hprev, hnext)) return 0;
+        hprev = hnext;
+    }
+    return 1;
+}
+
 /* Relative tolerance for S after a round trip through u at (rho, T). Solving
  * for the position inside the T cell amplifies roundoff in u by u/du_cell,
  * and that position error maps to S through dS_cell; in cold dense cells the
@@ -404,18 +426,156 @@ static void testFusedLookup(ANEOSMATERIAL *m)
 {
     int failsBefore = nFails;
     TEST("ANEOSPCTofRhoU matches the separate calls");
-    /* The separate calls go through T and recompute the cell coordinate from
-     * it, so the two paths differ by roundoff in y, amplified where c or P
-     * change steeply across a cell. */
+    /* All (rho, u) functions evaluate in the cell of one shared lookup (ANEOSLocateRhoU), so the
+     * fused and the separate calls agree bit for bit. Up to 1.2.0 the separate calls went through T
+     * and recomputed the cell coordinate from it, and only agreed to roundoff (1e-12 here). */
     for (int a = 0; a < NSAMPLE_RHO; a++) for (int b = 0; b < NSAMPLE_T; b++) {
         double rho = sampleRho(m, a), T = sampleT(m, b);
         double u = ANEOSUofRhoT(m, rho, T);
         double c, Tf;
         double P = ANEOSPCTofRhoU(m, rho, u, &c, &Tf);
-        CHECK_NEAR(P, ANEOSPofRhoU(m, rho, u), 1e-12, pressureScale(m, rho, T), "fused P at rho=%g", rho);
-        CHECK_REL(c, ANEOSCofRhoU(m, rho, u), 1e-12, "fused c at rho=%g", rho);
-        CHECK_REL(Tf, ANEOSTofRhoU(m, rho, u), 1e-12, "fused T at rho=%g", rho);
+        CHECK(P == ANEOSPofRhoU(m, rho, u), "fused P at rho=%g T=%g: %.17g vs %.17g", rho, T, P, ANEOSPofRhoU(m, rho, u));
+        CHECK(c == ANEOSCofRhoU(m, rho, u), "fused c at rho=%g T=%g: %.17g vs %.17g", rho, T, c, ANEOSCofRhoU(m, rho, u));
+        CHECK(Tf == ANEOSTofRhoU(m, rho, u), "fused T at rho=%g T=%g: %.17g vs %.17g", rho, T, Tf, ANEOSTofRhoU(m, rho, u));
     }
+    END_TEST();
+}
+
+/*
+ * The border strips of the table: the first and last density cell over all temperature cells, and
+ * the first and last temperature cell over all density cells. The interior tests sample 5..95% of
+ * the log axes and never reach them, which is how a root in the last density cell went unnoticed in
+ * ANEOSRhoofPU (up to 1.2.0). The checks are the invariants of the interior tests, with tolerances
+ * set by the roundoff of the cell itself rather than fixed: the first temperature cell is the cold
+ * one, where the thermal part of u is a tiny fraction of the cold-curve energy.
+ *
+ * Per point (rho, T) at the off-grid fractions (x, y) of cell (i, j):
+ *   - u, P, c, s are the bilinear values of the cell (computed here from the arrays);
+ *   - P, c, T of ANEOSPCTofRhoU equal the separate (rho, u) calls bit for bit (all evaluate in the
+ *     cell of one lookup), and du/drho is P/rho^2;
+ *   - T(rho, u) returns a root: u(rho, T(rho, u)) = u, and T itself where u(T) is invertible;
+ *   - the (rho, T) partials equal the cell's finite differences, and dP/du|rho, dP/drho|u the
+ *     formulae of the cell where T(rho, u) lands in it;
+ *   - rho(P, T) and the isentrope to the same density reproduce P and s;
+ *   - none of these in-table lookups counts a failure.
+ */
+static void testEdgeCells(ANEOSMATERIAL *m)
+{
+    int failsBefore = nFails;
+    TEST("edge cells: first and last rho and T cells");
+    static const double frac[3] = { 0.31, 0.53, 0.77 };
+    const double eps = DBL_EPSILON;
+    const long nf0 = m->nLookupFail;
+    long nPoints = 0, nNotInvertible = 0, nOtherRoot = 0, nSNotInvertible = 0;
+
+    for (int strip = 0; strip < 4; strip++) {
+        /* strips 0, 1: density cell 0 and nRho-2 over all T cells; 2, 3: T cell 0 and nT-2 over all density cells */
+        const int nAlong = (strip < 2) ? m->nT - 1 : m->nRho - 1;
+        const int stride = nAlong / 300 + 1;
+        for (int k = 0; k < nAlong; k += stride) {
+            const int i = (strip == 0) ? 0 : (strip == 1) ? m->nRho - 2 : k;
+            const int j = (strip == 2) ? 0 : (strip == 3) ? m->nT - 2 : k;
+            for (int fx = 0; fx < 3; fx++) for (int fy = 0; fy < 3; fy++) {
+                const double rho_cgs = m->rhoAxis[i] + frac[fx] * (m->rhoAxis[i+1] - m->rhoAxis[i]);
+                const double T = m->TAxis[j] + frac[fy] * (m->TAxis[j+1] - m->TAxis[j]);
+                const double rho = rho_cgs * m->CGStoCodeUnitsforRho;
+                /* The cell coordinates the library sees, after the code-unit round trip. */
+                const double rc = rho * m->CodeUnitstoCGSforRho;
+                const double x = (rc - m->rhoAxis[i]) / (m->rhoAxis[i+1] - m->rhoAxis[i]);
+                const double y = (T - m->TAxis[j]) / (m->TAxis[j+1] - m->TAxis[j]);
+#define CELLV(A) ((1.0 - x) * ((1.0 - y) * (A)[i][j] + y * (A)[i][j+1]) + x * ((1.0 - y) * (A)[i+1][j] + y * (A)[i+1][j+1]))
+#define CELLMAX(A) fmax(fmax(fabs((A)[i][j]), fabs((A)[i][j+1])), fmax(fabs((A)[i+1][j]), fabs((A)[i+1][j+1])))
+                const double uScale = CELLMAX(m->uArray), pScale = CELLMAX(m->pArray), sScale = CELLMAX(m->sArray);
+                nPoints++;
+
+                /* Forward lookups: the bilinear values of the cell. */
+                double u = ANEOSUofRhoT(m, rho, T), P = ANEOSPofRhoT(m, rho, T), c = ANEOSCofRhoT(m, rho, T), S = ANEOSSofRhoT(m, rho, T);
+                CHECK(fabs(u * m->CodeUnitstoCGSforU - CELLV(m->uArray)) <= 64 * eps * uScale, "u in edge cell (%d,%d): %.17g vs %.17g", i, j, u * m->CodeUnitstoCGSforU, CELLV(m->uArray));
+                CHECK(fabs(P * m->CodeUnitstoCGSforP - CELLV(m->pArray)) <= 64 * eps * pScale, "P in edge cell (%d,%d)", i, j);
+                CHECK(fabs(c / m->CGStoCodeUnitsforC - CELLV(m->cArray)) <= 64 * eps * CELLMAX(m->cArray), "c in edge cell (%d,%d)", i, j);
+                CHECK(fabs(S - CELLV(m->sArray)) <= 64 * eps * sScale, "s in edge cell (%d,%d)", i, j);
+
+                /* The fused lookup and the separate (rho, u) calls: one cell, the same numbers. */
+                double cf, Tf, Pf = ANEOSPCTofRhoU(m, rho, u, &cf, &Tf);
+                CHECK(Pf == ANEOSPofRhoU(m, rho, u) && cf == ANEOSCofRhoU(m, rho, u) && Tf == ANEOSTofRhoU(m, rho, u),
+                      "PCT vs separate calls in edge cell (%d,%d): P %.17g/%.17g c %.17g/%.17g T %.17g/%.17g", i, j,
+                      Pf, ANEOSPofRhoU(m, rho, u), cf, ANEOSCofRhoU(m, rho, u), Tf, ANEOSTofRhoU(m, rho, u));
+                CHECK(ANEOSdUdRhoofRhoU(m, rho, u) == Pf / (rho * rho), "du/drho in edge cell (%d,%d)", i, j);
+
+                /* T(rho, u) is a root of u(rho, T) = u: the error in u is the roundoff of the cell. */
+                CHECK(fabs(ANEOSUofRhoT(m, rho, Tf) - u) * m->CodeUnitstoCGSforU <= 256 * eps * uScale,
+                      "u(rho, T(rho, u)) in edge cell (%d,%d): T = %g, T(rho, u) = %g", i, j, T, Tf);
+                const int bInvertible = temperatureInvertible(m, rho, T);
+                if (bInvertible) {
+                    /* The roundoff of u in the cell maps to T through 1/(du/dT) of the cell. */
+                    const double dudT = fabs((1.0 - x) * (m->uArray[i][j+1] - m->uArray[i][j]) + x * (m->uArray[i+1][j+1] - m->uArray[i+1][j])) / (m->TAxis[j+1] - m->TAxis[j]);
+                    CHECK(fabs(Tf - T) <= 1e-13 * T + 256 * eps * uScale / dudT, "T(rho, u) in edge cell (%d,%d): %.17g vs %.17g", i, j, Tf, T);
+                } else {
+                    nNotInvertible++;
+                    if (fabs(Tf - T) > 1e-6 * T) nOtherRoot++;
+                }
+
+                /* Partials at fixed T and fixed rho: central differences inside the cell are exact up to roundoff. */
+                {
+                    const double hr = 0.01 * (m->rhoAxis[i+1] - m->rhoAxis[i]) * m->CGStoCodeUnitsforRho;
+                    const double hT = 0.01 * (m->TAxis[j+1] - m->TAxis[j]);
+                    const double pS = pScale * m->CGStoCodeUnitsforP;
+                    double a = ANEOSdPdRhoofRhoT(m, rho, T);
+                    double fd = (ANEOSPofRhoT(m, rho + hr, T) - ANEOSPofRhoT(m, rho - hr, T)) / (2 * hr);
+                    CHECK(fabs(a - fd) <= 1e-10 * fabs(a) + 256 * eps * pS / hr, "dP/drho|T in edge cell (%d,%d): %g vs %g", i, j, a, fd);
+                    a = ANEOSdPdTofRhoT(m, rho, T);
+                    fd = (ANEOSPofRhoT(m, rho, T + hT) - ANEOSPofRhoT(m, rho, T - hT)) / (2 * hT);
+                    CHECK(fabs(a - fd) <= 1e-10 * fabs(a) + 256 * eps * pS / hT, "dP/dT|rho in edge cell (%d,%d): %g vs %g", i, j, a, fd);
+                }
+                /* (rho, u) partials: where T(rho, u) lies in this cell they are the cell's formulae. */
+                if (bInvertible) {
+                    const double dT = m->TAxis[j+1] - m->TAxis[j], dR = m->rhoAxis[i+1] - m->rhoAxis[i];
+                    const double dPdT = ((1.0 - x) * (m->pArray[i][j+1] - m->pArray[i][j]) + x * (m->pArray[i+1][j+1] - m->pArray[i+1][j])) / dT;
+                    const double dudT = ((1.0 - x) * (m->uArray[i][j+1] - m->uArray[i][j]) + x * (m->uArray[i+1][j+1] - m->uArray[i+1][j])) / dT;
+                    const double yf = (Tf - m->TAxis[j]) / dT;
+                    const double dPdR = ((1.0 - yf) * (m->pArray[i+1][j] - m->pArray[i][j]) + yf * (m->pArray[i+1][j+1] - m->pArray[i][j+1])) / dR;
+                    const double dudR = ((1.0 - yf) * (m->uArray[i+1][j] - m->uArray[i][j]) + yf * (m->uArray[i+1][j+1] - m->uArray[i][j+1])) / dR;
+                    double dPdU = ANEOSdPdUofRhoU(m, rho, u), dPdRhoU = ANEOSdPdRhoofRhoU(m, rho, u);
+                    if (dudT > 0.0) {
+                        CHECK_REL(dPdU, dPdT / dudT * m->CGStoCodeUnitsforP * m->CodeUnitstoCGSforU, 1e-12, "dP/du|rho in edge cell (%d,%d)", i, j);
+                        /* dP/drho|u = dP/drho|T - dP/dT dudrho/dudT: a difference, so the scale is its larger term. */
+                        const double t1 = dPdR, t2 = dPdT * dudR / dudT, conv = m->CGStoCodeUnitsforP * m->CodeUnitstoCGSforRho;
+                        CHECK(fabs(dPdRhoU - (t1 - t2) * conv) <= 1e-12 * fmax(fabs(t1), fabs(t2)) * conv + 1e-12 * fabs(dPdRhoU),
+                              "dP/drho|u in edge cell (%d,%d): %g vs %g", i, j, dPdRhoU, (t1 - t2) * conv);
+                    } else {
+                        CHECK(isSentinel(dPdU) && isSentinel(dPdRhoU), "(rho, u) derivatives with du/dT <= 0 in edge cell (%d,%d)", i, j);
+                    }
+                }
+
+                /* rho(P, T) returns a density with this P (several are possible on a row with a maximum). */
+                {
+                    double rP = ANEOSRhoofPT(m, P, T);
+                    CHECK(!isSentinel(rP), "rho(P,T) failed in edge cell (%d,%d)", i, j);
+                    if (!isSentinel(rP))
+                        CHECK(fabs(ANEOSPofRhoT(m, rP, T) - P) <= 1e-9 * pScale * m->CGStoCodeUnitsforP, "P(rho(P,T),T) in edge cell (%d,%d)", i, j);
+                }
+                /*
+                 * The isentrope to the same density keeps s. Only where s(T) has a unique root: on a
+                 * line with several (forsterite near 1000 g/cc: s(T) decreases in 982 of 1600 cells),
+                 * the inversion may return another root, and T(rho, u2) at that state yet another.
+                 */
+                if (bInvertible && !entropyInvertible(m, rho, T)) nSNotInvertible++;
+                if (bInvertible && entropyInvertible(m, rho, T)) {
+                    double u2 = ANEOSisentropicU(m, rho, u, rho);
+                    double S2 = ANEOSSofRhoU(m, rho, u2), S1 = ANEOSSofRhoU(m, rho, u);
+                    CHECK(fabs(S2 - S1) <= entropyRoundTripTol(m, rho, T, S1) * fmax(fabs(S1), sScale * 1e-3) + 256 * eps * sScale,
+                          "s along the isentrope to the same rho in edge cell (%d,%d): %.17g vs %.17g", i, j, S2, S1);
+                }
+#undef CELLV
+#undef CELLMAX
+            }
+        }
+    }
+    CHECK(m->nLookupFail == nf0, "in-table lookups in the edge cells counted %ld failures", m->nLookupFail - nf0);
+    m->nLookupFail = nf0;
+    if (nNotInvertible || nSNotInvertible)
+        NOTE("%ld of %ld edge-cell states with u(T) not invertible (T(rho, u) another root for %ld), %ld more with s(T) not invertible (table defects)",
+             nNotInvertible, nPoints, nOtherRoot, nSNotInvertible);
     END_TEST();
 }
 
@@ -1237,6 +1397,7 @@ int main(int argc, char *argv[])
     testDensityInversion(m);
     testFusedLookup(m);
     testDerivatives(m);
+    testEdgeCells(m);
     testIsentrope(m);
     testRhoofPU(m);
     testOptionalTables(m);
