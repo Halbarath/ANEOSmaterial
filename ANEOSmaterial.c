@@ -1058,13 +1058,17 @@ int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T)
 /*
  * Calculates the isentropic evolution u2(rho1,u1,rho2).
  *
- * If the entropy S(rho1,u1) is not attained at rho2 (the state would fall
- * below the table), u2 is clamped to the cold curve u(rho2, TAxis[0]), the
- * same convention ANEOSTofRhoU uses for sub-table states. Returns -1e50 only
- * if rho2 itself is outside the table.
+ * If the entropy S(rho1,u1) is not attained at rho2, u2 is clamped to the
+ * table edge on the side the isentrope leaves it: to the cold curve
+ * u(rho2, TAxis[0]) when S lies below the s(T) line at rho2 (the same
+ * convention ANEOSTofRhoU uses for sub-table states), to the top row
+ * u(rho2, TAxis[nT-1]) when it lies above (a hot state compressed beyond the
+ * table; scvheosIsentropicU does the same). Both clamps are counted in
+ * nLookupFail. Returns -1e50 only if rho2 itself is outside the table.
  */
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2)
 {
+    const double rho2_cgs = rho2*material->CodeUnitstoCGSforRho;
     double oldT = ANEOSTofRhoU(material,rho1,u1);
     double oldS, newT;
     INTERPCELL cell;
@@ -1073,13 +1077,24 @@ double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double 
         material->nLookupFail++;
         ANEOS_WARN("ANEOSisentropicU oldS failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e, using cold curve at rho2\n", rho1, u1, rho2);
         newT = material->TAxis[0];
-    } else {
-        if (interpInvertY(&material->grid, material->sData, rho2*material->CodeUnitstoCGSforRho, oldS,
-                          ANEOS_EDGE_TOL, &ANEOSInvertOpt, &cell, &newT) != INTERP_SUCCESS) {
-            material->nLookupFail++;
-            ANEOS_WARN("ANEOSisentropicU newT failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e, using cold curve at rho2\n", rho1, u1, rho2);
-            newT = material->TAxis[0];
+    } else if (interpInvertY(&material->grid, material->sData, rho2_cgs, oldS,
+                             ANEOS_EDGE_TOL, &ANEOSInvertOpt, &cell, &newT) != INTERP_SUCCESS) {
+        /*
+         * S is not attained on the s(T) line at rho2. The tolerant inversion scans every segment,
+         * so S lies below the line's minimum or above its maximum. The top row is not above the
+         * maximum, so S > s(rho2, T_max) tells the two apart even on a defective (non-monotonic)
+         * line. rho2 outside the table: no line, u(rho2, T) below returns the sentinel anyway.
+         */
+        int i;
+        double w;
+        material->nLookupFail++;
+        newT = material->TAxis[0];
+        if (interpLocateAxis(material->rhoAxis, material->nRho, rho2_cgs, ANEOS_EDGE_TOL, &i, &w) == INTERP_SUCCESS &&
+            oldS > interpLineValue(&material->grid, material->sData, INTERP_ALONG_Y, i, w, material->nT - 1)) {
+            newT = material->TAxis[material->nT - 1];
         }
+        ANEOS_WARN("ANEOSisentropicU newT failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e, using %s at rho2\n",
+                   rho1, u1, rho2, (newT == material->TAxis[0]) ? "the cold curve" : "the top row of the table");
     }
 
     /* ANEOSUofRhoT returns -1e50 if rho2 is outside the table. */

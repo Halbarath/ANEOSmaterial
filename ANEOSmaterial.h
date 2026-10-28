@@ -63,6 +63,10 @@
  *          ANEOS_FAIL_VALUE for an invalid rho, clamped to the table).
  *          ANEOSRhoofPU scans every density node including the last one: a root in
  *          the last density cell was never bracketed and gave ANEOS_FAIL_VALUE.
+ *          ANEOSisentropicU clamps an isentrope that leaves the table at the top to
+ *          u(rho2, T_max), like scvheosIsentropicU; it was clamped to the cold curve
+ *          like one leaving at the bottom, which dropped the thermal energy of a hot
+ *          compressed state.
  */
 #define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1

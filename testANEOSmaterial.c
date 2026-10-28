@@ -516,6 +516,54 @@ static void testIsentrope(ANEOSMATERIAL *m)
         }
     }
     if (nSkipped) NOTE("%d isentrope checks skipped (u(T) not invertible, table defect)", nSkipped);
+
+    /*
+     * Isentropes that leave the table: a hot state compressed far, or a cold one expanded far, has
+     * an entropy that the s(T) line at rho2 does not attain. The state is clamped to the edge it
+     * leaves through: the top row u(rho2, T_max) if S lies above the whole line, the cold curve
+     * u(rho2, T_min) if below, counted in nLookupFail. (Up to ANEOSmaterial 1.2.0 both went to the
+     * cold curve, which dropped the thermal energy of a hot compressed state.) The line's range is
+     * taken from the table here, independently of the library, with a margin for the T(rho, u)
+     * round trip in S(rho1, u1).
+     */
+    {
+        static const double fac[4] = {1.0 / 50.0, 1.0 / 5.0, 5.0, 50.0};
+        const int bs[2] = {2, NSAMPLE_T - 3};
+        int nAbove = 0, nBelow = 0;
+        long nf0 = m->nLookupFail;
+        for (int a = 1; a < NSAMPLE_RHO - 1; a += 7) for (int q = 0; q < 2; q++) for (int f = 0; f < 4; f++) {
+            double rho1 = sampleRho(m, a), T1 = sampleT(m, bs[q]), rho2 = fac[f] * rho1;
+            double rho2_cgs = rho2 * m->CodeUnitstoCGSforRho, w, smin = INFINITY, smax = -INFINITY;
+            int i;
+            if (!temperatureInvertible(m, rho1, T1)) continue;
+            if (interpLocateAxis(m->rhoAxis, m->nRho, rho2_cgs, ANEOS_EDGE_TOL, &i, &w) != INTERP_SUCCESS) continue;
+            for (int j = 0; j < m->nT; j++) {
+                double s = (1.0 - w) * m->sArray[i][j] + w * m->sArray[i+1][j];
+                smin = fmin(smin, s);
+                smax = fmax(smax, s);
+            }
+            double u1 = ANEOSUofRhoT(m, rho1, T1), S1 = ANEOSSofRhoT(m, rho1, T1);
+            double margin = 1e-8 * (fabs(smin) + fabs(smax));
+            if (S1 > smax + margin) {
+                long nf = m->nLookupFail;
+                double u2 = ANEOSisentropicU(m, rho1, u1, rho2);
+                CHECK(u2 == ANEOSUofRhoT(m, rho2, m->TAxis[m->nT-1]), "isentrope above the table at rho=%g->%g T=%g: u2=%g, top row %g, cold curve %g",
+                      rho1, rho2, T1, u2, ANEOSUofRhoT(m, rho2, m->TAxis[m->nT-1]), ANEOSUCold(m, rho2));
+                CHECK(m->nLookupFail == nf + 1, "clamp to the top row counted %ld times", m->nLookupFail - nf);
+                nAbove++;
+            } else if (S1 < smin - margin) {
+                long nf = m->nLookupFail;
+                double u2 = ANEOSisentropicU(m, rho1, u1, rho2);
+                CHECK(u2 == ANEOSUCold(m, rho2), "isentrope below the table at rho=%g->%g T=%g: u2=%g, cold curve %g",
+                      rho1, rho2, T1, u2, ANEOSUCold(m, rho2));
+                CHECK(m->nLookupFail == nf + 1, "clamp to the cold curve counted %ld times", m->nLookupFail - nf);
+                nBelow++;
+            }
+        }
+        CHECK(nAbove > 0, "no isentrope leaving the table at the top was tested");
+        m->nLookupFail = nf0;
+        NOTE("%d isentropes clamped to the top row, %d to the cold curve", nAbove, nBelow);
+    }
     END_TEST();
 }
 
