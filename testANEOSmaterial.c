@@ -971,6 +971,9 @@ static void testFailureContract(ANEOSMATERIAL *m)
     }
     /* Gamma with failed sound speed. */
     if (!m->fixedGamma) CHECK(ANEOSGammaofRhoT(m, rhoHi, 300.0) == ANEOS_FAIL_VALUE, "Gamma with failed c");
+    /* A NaN density: c is the sentinel (ANEOSFailed, which the old test c < -1e40 would also have
+     * passed only because ANEOSCofRhoT never returns NaN). */
+    if (!m->fixedGamma) CHECK(ANEOSGammaofRhoT(m, NAN, 300.0) == ANEOS_FAIL_VALUE, "Gamma for a NaN rho");
 
     CHECK(m->nLookupFail > nf0, "nLookupFail did not increase (%ld -> %ld)", nf0, m->nLookupFail);
     END_TEST();

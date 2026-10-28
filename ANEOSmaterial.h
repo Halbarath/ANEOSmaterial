@@ -84,6 +84,9 @@
  *          whose cold rows have du/dT < 0 (M-ANEOS), so EOSIsUsable rejected them.
  *          ANEOS_N_MATERIAL_MAX is 101, the largest id plus one (an array of 100 entries
  *          indexed by iMat overflowed by one for id 100).
+ *          ANEOSGammaofRhoT tests the sound speed with ANEOSFailed (it compared c < -1e40,
+ *          which let a NaN through). ANEOSPrintMat prints rho0 in cgs with the unit, like the
+ *          table boundaries and reos3PrintMat (it printed the code-unit value unlabelled).
  *          P, c, s and the derivatives can differ from 1.2.0 in the last bits (no
  *          second locate from T); at a node of the T axis the derivatives are taken
  *          in the cell of the inversion, where they could come from the cell above.

@@ -1385,7 +1385,7 @@ double ANEOSGammaofRhoT(ANEOSMATERIAL *material, double rho, double T) {
         // and the difference in the resulting shear modulus is less than 25%
         double nu = 0.25;
         double c = ANEOSCofRhoT(material, rho, T);
-        if (c < -1e40) return ANEOS_FAIL_VALUE;
+        if (ANEOSFailed(c)) return ANEOS_FAIL_VALUE;   /* counted once, in ANEOSCofRhoT */
         double bulkModulus = rho * c * c;
         return bulkModulus * 3.0 * (1.0 - 2.0 * nu) / (2.0 * (1.0 + nu));
     }
@@ -1394,7 +1394,7 @@ double ANEOSGammaofRhoT(ANEOSMATERIAL *material, double rho, double T) {
 void ANEOSPrintMat(ANEOSMATERIAL *material, FILE *fp)
 {
     fprintf(fp,"# Material: %i (%s)\n", material->iMat, material->matName);
-    fprintf(fp,"# Reference density rho0: %g\n", material->rho0 * material->CGStoCodeUnitsforRho);
+    fprintf(fp,"# Reference density rho0 (cgs units): %g\n", material->rho0);
     fprintf(fp,"# Table size: nRho = %d, nT = %d\n", material->nRho, material->nT);
     fprintf(fp,"# Table boundaries (cgs units): minRho = %g, maxRho = %g, minT = %g, maxT = %g\n",material->rhoAxis[0],material->rhoAxis[material->nRho-1],material->TAxis[0],material->TAxis[material->nT-1]);
     fprintf(fp,"# %s\n",material->matstring);
