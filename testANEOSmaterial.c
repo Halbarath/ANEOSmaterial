@@ -148,13 +148,18 @@ static int entropyMonotonicInColumn(ANEOSMATERIAL *m, int i)
     return 1;
 }
 
-/* 1 if u(T) is strictly increasing along the whole columns i and i+1. */
-static int energyMonotonicInColumn(ANEOSMATERIAL *m, int i)
+/*
+ * 1 if the energy u_cgs lies above every defective segment (u(T) not increasing) of the columns
+ * i and i+1, so that the u(T) lines through the state's density cell attain u once and only in
+ * their monotonic part. A requirement that the whole columns be monotonic excludes every M-ANEOS
+ * column (their cold rows are defective at all densities, du/dT < 0 up to 18-58 K), and with it
+ * every state; this one only excludes states whose energy reaches into a defect.
+ */
+static int energyAboveDefectsInColumn(ANEOSMATERIAL *m, int i, double u_cgs)
 {
-    for (int j = 0; j < m->nT - 1; j++) {
-        if (!(m->uArray[i][j+1] > m->uArray[i][j])) return 0;
-        if (!(m->uArray[i+1][j+1] > m->uArray[i+1][j])) return 0;
-    }
+    for (int k = i; k <= i + 1; k++)
+        for (int j = 0; j < m->nT - 1; j++)
+            if (!(m->uArray[k][j+1] > m->uArray[k][j]) && fmax(m->uArray[k][j], m->uArray[k][j+1]) >= u_cgs) return 0;
     return 1;
 }
 
@@ -551,36 +556,71 @@ static int pressureMonotoneInCell(ANEOSMATERIAL *m, double rho, double u)
     return 1;
 }
 
+/*
+ * One rho(P,u) / T(P,u) check at the state (rho, T). Returns 0 if checked, 1 if skipped because
+ * u(T) is not invertible or u reaches into a defect of the cell's columns (table defects), 2 if
+ * skipped because P(rho,u) is not monotone in rho
+ * across the cell (double-valued rho(P,u) near the cold curve).
+ */
+static int checkRhoofPU(ANEOSMATERIAL *m, double rho, double T)
+{
+    /* The residual P(rho,u) - P needs a unique T(rho,u) in the state's density cell, so a state
+     * whose energy reaches into a defective segment of its columns is untestable. */
+    int i = interpFindIndex(rho * m->CodeUnitstoCGSforRho, m->rhoAxis, m->nRho);
+    if (!temperatureInvertible(m, rho, T)) return 1;
+    double P = ANEOSPofRhoT(m, rho, T), u = ANEOSUofRhoT(m, rho, T);
+    if (!energyAboveDefectsInColumn(m, i, u * m->CodeUnitstoCGSforU)) return 1;
+    if (!pressureMonotoneInCell(m, rho, u)) return 2;
+    double rho2 = ANEOSRhoofPU(m, P, u);
+    if (isSentinel(rho2)) { CHECK(0, "RhoofPU failed at rho=%g T=%g (density cell %d of %d)", rho, T, i, m->nRho - 1); return 0; }
+    /* Possibly another root; the returned state must reproduce (P, u). The root is converged
+     * to 1e-10 in density, so the P residual is up to 1e-10 rho dP/drho|u, which relative to P
+     * is (K/P) 1e-10 and exceeds 1e-7 where P crosses zero; the bound includes that term. */
+    {
+        double h = 1e-6 * rho2, P2 = ANEOSPofRhoU(m, rho2, u);
+        double slope = fmax(fabs(ANEOSPofRhoU(m, rho2 + h, u) - P2), fabs(P2 - ANEOSPofRhoU(m, rho2 - h, u))) / h;
+        CHECK(fabs(P2 - P) <= 1e-7 * fabs(P) + 4.0 * 1e-10 * rho2 * slope, "P at rho(P,u), rho=%g T=%g: %.15e vs %.15e", rho, T, P2, P);
+    }
+    double T2 = ANEOSTofPU(m, P, u);
+    CHECK(!isSentinel(T2) && T2 > 0.0, "TofPU failed at rho=%g T=%g", rho, T);
+    return 0;
+}
+
 static void testRhoofPU(ANEOSMATERIAL *m)
 {
     int failsBefore = nFails;
     TEST("rho(P,u) and T(P,u)");
-    int nSkipped = 0, nSkippedBump = 0;
+    int nSkipped = 0, nSkippedBump = 0, nEdge = 0;
     long nf0 = m->nLookupFail;
     for (int a = 1; a < NSAMPLE_RHO - 1; a += 3) for (int b = 1; b < NSAMPLE_T - 1; b += 3) {
-        double rho = sampleRho(m, a), T = sampleT(m, b);
-        /* The residual P(rho,u) - P needs T(rho,u) along the whole column down
-         * to the cold curve, so broken cold rows make the state untestable. */
-        int i = interpFindIndex(rho * m->CodeUnitstoCGSforRho, m->rhoAxis, m->nRho);
-        if (!temperatureInvertible(m, rho, T) || !energyMonotonicInColumn(m, i)) { nSkipped++; continue; }
-        double P = ANEOSPofRhoT(m, rho, T), u = ANEOSUofRhoT(m, rho, T);
-        if (!pressureMonotoneInCell(m, rho, u)) { nSkippedBump++; continue; }
-        double rho2 = ANEOSRhoofPU(m, P, u);
-        if (isSentinel(rho2)) { CHECK(0, "RhoofPU failed at rho=%g T=%g", rho, T); continue; }
-        /* Possibly another root; the returned state must reproduce (P, u). The root is converged
-         * to 1e-10 in density, so the P residual is up to 1e-10 rho dP/drho|u, which relative to P
-         * is (K/P) 1e-10 and exceeds 1e-7 where P crosses zero; the bound includes that term. */
-        {
-            double h = 1e-6 * rho2, P2 = ANEOSPofRhoU(m, rho2, u);
-            double slope = fmax(fabs(ANEOSPofRhoU(m, rho2 + h, u) - P2), fabs(P2 - ANEOSPofRhoU(m, rho2 - h, u))) / h;
-            CHECK(fabs(P2 - P) <= 1e-7 * fabs(P) + 4.0 * 1e-10 * rho2 * slope, "P at rho(P,u), rho=%g T=%g: %.15e vs %.15e", rho, T, P2, P);
-        }
-        double T2 = ANEOSTofPU(m, P, u);
-        CHECK(!isSentinel(T2) && T2 > 0.0, "TofPU failed at rho=%g T=%g", rho, T);
+        int r = checkRhoofPU(m, sampleRho(m, a), sampleT(m, b));
+        if (r == 1) nSkipped++;
+        if (r == 2) nSkippedBump++;
     }
+    /*
+     * The first and the last density cell. The log-spaced samples above cover 5% to 95% of the
+     * axis and never reach them, which hid that ANEOSRhoofPU did not scan the last node (a root in
+     * the last cell was never bracketed, up to ANEOSmaterial 1.2.0).
+     */
+    for (int edge = 0; edge < 2; edge++) {
+        /* Positions inside the cell off the 1/32 grid of pressureMonotoneInCell, which needs
+         * rho to differ from its sample points (P must increase strictly along them). */
+        static const double frac[3] = {0.31, 0.53, 0.77};
+        int i = edge ? m->nRho - 2 : 0;
+        for (int k = 0; k < 3; k++) {
+            double rho = (m->rhoAxis[i] + frac[k] * (m->rhoAxis[i+1] - m->rhoAxis[i])) * m->CGStoCodeUnitsforRho;
+            for (int b = 1; b < NSAMPLE_T - 1; b += 10) {
+                int r = checkRhoofPU(m, rho, sampleT(m, b));
+                if (r == 0) nEdge++;
+                if (r == 1) nSkipped++;
+                if (r == 2) nSkippedBump++;
+            }
+        }
+    }
+    CHECK(nEdge > 0, "no rho(P,u) state in the first or last density cell could be tested");
     m->nLookupFail = nf0;   /* the cold-curve probes above may have logged fallbacks */
     if (nSkipped || nSkippedBump)
-        NOTE("%d rho(P,u) checks skipped (u(T) not invertible), %d skipped (P(rho,u) not monotone in rho near the cold curve)",
+        NOTE("%d rho(P,u) checks skipped (u(T) not invertible, or u reaches into a table defect), %d skipped (P(rho,u) not monotone in rho near the cold curve)",
              nSkipped, nSkippedBump);
     END_TEST();
 }

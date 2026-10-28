@@ -61,6 +61,8 @@
  *          unreachable branch returning -1.0 (outside the failure contract);
  *          its comment now says what it does (fatal without a melt curve,
  *          ANEOS_FAIL_VALUE for an invalid rho, clamped to the table).
+ *          ANEOSRhoofPU scans every density node including the last one: a root in
+ *          the last density cell was never bracketed and gave ANEOS_FAIL_VALUE.
  */
 #define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1

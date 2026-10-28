@@ -933,7 +933,12 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
 
     double gprev = 0.0;
     int outPrev = 0, iprev = -1;
-    for (int i = 0; i < nRho - 1; i++) {
+    /*
+     * Every node, the last one included: the table is closed at rhoAxis[nRho-1], so the residual
+     * is defined there, and without it a root in the last cell is never bracketed (up to 1.2.0
+     * the loop stopped at nRho-2 and reported "no root found" for such a state).
+     */
+    for (int i = 0; i < nRho; i++) {
         int out;
         double g = ANEOSRhoofPUResidual(material, material->rhoAxis[i], p_cgs, u_cgs, &out);
         if (g < -1e40) continue;
