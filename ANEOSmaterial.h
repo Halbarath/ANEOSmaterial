@@ -97,6 +97,9 @@
  *          ANEOSisentropicU returns ANEOS_FAIL_VALUE for rho1 outside the table, as the failure
  *          contract says and as scvheosIsentropicU does; it returned the cold curve at rho2, a
  *          finite value that a caller could not tell from a result.
+ *          ANEOSReadStrengthParameters rejects (fatal) anything but whitespace or a comment after
+ *          the value ("Y0 = 1e8 1e9" was read as Y0 = 1e8); a last line without a newline is
+ *          accepted also when it exactly fills the line buffer (it was reported as too long).
  */
 #define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1

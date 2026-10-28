@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <ctype.h>
 #include "ANEOSmaterial.h"
 
 /*
@@ -490,7 +491,8 @@ int ANEOSReadMeltCurve(ANEOSMATERIAL *material, char *inputfile)
  *   xi  = 1.2
  *   Gamma = -1      # -1: compute shear modulus from the sound speed
  *
- * Whitespace around '=' is ignored; '#' starts a comment anywhere on a line.
+ * Whitespace around '=' is ignored; '#' starts a comment anywhere on a line. One value per line:
+ * anything but whitespace or a comment after it is an error. The last line needs no newline.
  * Returns 1 if the file does not exist (no strength available), 0 on success.
  * Malformed files are fatal, and so are parameters the yield model cannot use,
  * so that a bad file stops the run at initialisation and not at the first
@@ -536,8 +538,19 @@ int ANEOSReadStrengthParameters(ANEOSMATERIAL *material, char *inputfile)
     while (fgets(buffer, sizeof(buffer), file)) {
         iLine++;
 
-        /* Reject lines longer than the buffer rather than silently splitting them. */
-        if (strchr(buffer, '\n') == NULL && !feof(file)) {
+        /*
+         * Reject lines longer than the buffer rather than silently splitting them. A line without
+         * '\n' is complete only at the end of the file. feof is not yet set when the last line,
+         * without a newline, exactly fills the buffer (fgets stops before it reads EOF), so the
+         * next character decides: EOF means the line is complete.
+         */
+        int bLineComplete = (strchr(buffer, '\n') != NULL) || feof(file);
+        if (!bLineComplete) {
+            int c = fgetc(file);
+            if (c == EOF) bLineComplete = 1;
+            else ungetc(c, file);
+        }
+        if (!bLineComplete) {
             fprintf(stderr, "ANEOSReadStrengthParameters: %s line %d exceeds %d characters.\n",
                     inputfile, iLine, ANEOS_STRENGTH_LINE_MAX - 1);
             fclose(file);
@@ -552,13 +565,30 @@ int ANEOSReadStrengthParameters(ANEOSMATERIAL *material, char *inputfile)
         /* Skip blank lines (only whitespace left). */
         if (sscanf(buffer, " %255s", key) != 1) continue;
 
-        /* key = value, whitespace around '=' allowed. */
-        if (sscanf(buffer, " %255[^= \t\r\n] = %255s", key, value) != 2) {
+        /*
+         * key = value, whitespace around '=' allowed. Nothing but whitespace may follow the value
+         * (the comment is already stripped): "Y0 = 1e8 1e9" was accepted as Y0 = 1e8. %n gives
+         * the position after the value; the rest of the line, with or without its '\n' (the last
+         * line of a file need not have one) or a '\r' (CRLF), must be whitespace.
+         */
+        int nUsed = 0;
+        if (sscanf(buffer, " %255[^= \t\r\n] = %255s%n", key, value, &nUsed) != 2) {
             fprintf(stderr, "ANEOSReadStrengthParameters: cannot parse %s line %d: '%s'\n",
                     inputfile, iLine, buffer);
             fclose(file);
             assert(0);
             exit(1);
+        }
+        {
+            const char *rest = buffer + nUsed;
+            while (*rest != '\0' && isspace((unsigned char) *rest)) rest++;
+            if (*rest != '\0') {
+                fprintf(stderr, "ANEOSReadStrengthParameters: %s line %d: unexpected '%s' after the value of '%s'.\n",
+                        inputfile, iLine, rest, key);
+                fclose(file);
+                assert(0);
+                exit(1);
+            }
         }
 
         char *end = NULL;

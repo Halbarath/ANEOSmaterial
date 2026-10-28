@@ -1133,11 +1133,37 @@ static void testStrengthFileValidation(ANEOSMATERIAL *m)
         {"yieldStrengthModel = 1\nY0 = 1e8\nYM = inf\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1, "YM = inf"},
         {"yieldStrengthModel = 2\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nmud = nan\nxi = 1.2\nGamma = -1\n", 1, "mud = nan"},
         {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\n", 1, "Gamma missing"},
+        /* One value per line: a second token after the value is an error (it was ignored). */
+        {"yieldStrengthModel = 1\nY0 = 1e8 1e9\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1, "two values for Y0"},
+        {"yieldStrengthModel = 1 2\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1, "two values for the model"},
+        {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10 = 1\nmui = 1.5\nxi = 1.2\nGamma = -1\n", 1, "second '=' after the value"},
+        {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1 x", 1, "trailing token on the last line without newline"},
+        /* Whitespace, a comment, CRLF and a last line without a newline are fine. */
+        {"yieldStrengthModel = 1   \nY0 = 1e8\t \nYM=3.5e10 # comment\r\nmui = 1.5\r\nxi = 1.2\nGamma = -1", 0, "trailing whitespace, comment, CRLF, no final newline"},
+        {"yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\nGamma = -1   ", 0, "last line without newline, trailing blanks"},
     };
     for (size_t k = 0; k < sizeof(cases) / sizeof(cases[0]); k++) {
         writeFile(path, cases[k].text);
         int r = strengthFileRejected(m, path);
         CHECK(r == cases[k].bRejected, "%s: %s (got %d)", cases[k].what, cases[k].bRejected ? "must be rejected" : "must be accepted", r);
+    }
+    /*
+     * The last line without a newline, exactly filling the line buffer (255 characters): fgets
+     * stops before EOF, so feof is not set yet; it must not be reported as too long. A line one
+     * character longer, with a newline, is.
+     */
+    {
+        char text[1024], pad[300];
+        const char *head = "yieldStrengthModel = 1\nY0 = 1e8\nYM = 3.5e10\nmui = 1.5\nxi = 1.2\n";
+        const char *last = "Gamma = -1";
+        int nPad = 255 - (int) strlen(last);
+        memset(pad, ' ', (size_t) nPad); pad[nPad] = '\0';
+        snprintf(text, sizeof(text), "%s%s%s", head, last, pad);
+        writeFile(path, text);
+        CHECK(strengthFileRejected(m, path) == 0, "last line of 255 characters without newline must be accepted");
+        snprintf(text, sizeof(text), "%s%s%s \n", head, last, pad);
+        writeFile(path, text);
+        CHECK(strengthFileRejected(m, path) == 1, "line of 256 characters must be rejected");
     }
     /* An accepted file is read into the material (parsed here in the parent, then restored). */
     {
