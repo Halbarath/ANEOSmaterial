@@ -694,20 +694,58 @@ double ANEOSTofPU(ANEOSMATERIAL *material, double p, double u)
 }
 
 /*
- * Calculates temperature T(rho,u)
+ * Locate the state (rho, u) in the table: the density cell and the inversion of the u column
+ * there (the same two steps as interpInvertY), giving the cell (ix along rho, iy along T) with its
+ * local coordinates and T. Every (rho, u) function evaluates its tables in this one cell, as
+ * ANEOSPCTofRhoU always did (scvheos has the same helper, scvheosLocateRhoU):
+ *
+ *   - one search instead of two (T(rho, u), then a second locate of (rho, T) for P, c, s or the
+ *     partials), and no roundoff from recomputing the T coordinate of the cell from T;
+ *   - one bad state is counted once in nLookupFail. Up to 1.2.0 a density outside the table was
+ *     counted twice (the T fallback, then the failed lookup at (rho, T_min)) by ANEOSPofRhoU,
+ *     ANEOSCofRhoU, ANEOSSofRhoU, ANEOSPhaseofRhoU and the derivatives, once by ANEOSPCTofRhoU.
+ *
+ * Returns 0 on success, -1 (counted, message under EOSLIB_VERBOSE) if rho is outside the table or
+ * not a number. If u cannot be inverted (outside the column [u(T_min), u(T_max)], or NaN) the state
+ * falls back to T_min by contract: cell iy = 0, v = 0, T = TAxis[0], counted, and 0 is returned,
+ * so the values are those of (rho, T_min).
+ */
+static int ANEOSLocateRhoU(ANEOSMATERIAL *material, const char *chFunc, double rho, double u,
+                           INTERPCELL *cell, double *pT)
+{
+    const double rho_cgs = rho*material->CodeUnitstoCGSforRho;
+    const double u_cgs = u*material->CodeUnitstoCGSforU;
+
+    if (interpLocateAxis(material->rhoAxis, material->nRho, rho_cgs, ANEOS_EDGE_TOL, &cell->ix, &cell->u) != INTERP_SUCCESS) {
+        material->nLookupFail++;
+        ANEOS_WARN("%s: rho = %.15e outside the table (u = %.15e)\n", chFunc, rho, u);
+        *pT = material->TAxis[0];
+        return -1;
+    }
+
+    if (interpInvertLine(&material->grid, material->uData, INTERP_ALONG_Y, cell->ix, cell->u, u_cgs,
+                         &ANEOSInvertOpt, &cell->iy, &cell->v) != INTERP_SUCCESS) {
+        /* Fallback, by contract: the lowest tabulated temperature. */
+        material->nLookupFail++;
+        ANEOS_WARN("%s: T(rho,u) failed for rho = %.15e, u = %.15e, falling back to T = %.15e\n",
+                   chFunc, rho, u, material->TAxis[0]);
+        cell->iy = 0;
+        cell->v = 0.0;
+    }
+
+    *pT = interpLineCoord(&material->grid, INTERP_ALONG_Y, cell->iy, cell->v);
+    return 0;
+}
+
+/*
+ * Calculates temperature T(rho,u). Never fails: T_min if rho is outside the table or u cannot be
+ * inverted (counted).
  */
 double ANEOSTofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
     INTERPCELL cell;
     double T;
-    if (interpInvertY(&material->grid, material->uData, rho*material->CodeUnitstoCGSforRho, u*material->CodeUnitstoCGSforU,
-                      ANEOS_EDGE_TOL, &ANEOSInvertOpt, &cell, &T) != INTERP_SUCCESS)
-    {
-        /* Fallback, by contract: the lowest tabulated temperature. */
-        material->nLookupFail++;
-        ANEOS_WARN("ANEOSTofRhoU failed for rho = %.15e, u = %.15e, falling back to T = %.15e\n", rho, u, material->TAxis[0]);
-        T = material->TAxis[0];
-    }
+    (void) ANEOSLocateRhoU(material, __func__, rho, u, &cell, &T);   /* T = T_min on failure */
     return T;
 }
 
@@ -794,9 +832,10 @@ double ANEOSPofRhoT(ANEOSMATERIAL *material, double rho, double T)
  */
 double ANEOSPofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
-    double T = ANEOSTofRhoU(material,rho,u);
-    double p = ANEOSPofRhoT(material,rho,T);
-    return p;
+    INTERPCELL cell;
+    double T;
+    if (ANEOSLocateRhoU(material, __func__, rho, u, &cell, &T)) return ANEOS_FAIL_VALUE;
+    return interpCellValue(&material->grid, material->pData, &cell) * material->CGStoCodeUnitsforP;
 }
 
 /*
@@ -983,9 +1022,10 @@ double ANEOSRhoofPU(ANEOSMATERIAL *material, double p, double u)
  */
 double ANEOSCofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
-    double T = ANEOSTofRhoU(material,rho,u);
-    double c = ANEOSCofRhoT(material,rho,T);
-    return c;
+    INTERPCELL cell;
+    double T;
+    if (ANEOSLocateRhoU(material, __func__, rho, u, &cell, &T)) return ANEOS_FAIL_VALUE;
+    return interpCellValue(&material->grid, material->cData, &cell) * material->CGStoCodeUnitsforC;
 }
 
 /*
@@ -1002,33 +1042,18 @@ double ANEOSCofRhoT(ANEOSMATERIAL *material, double rho, double T)
     return c * material->CGStoCodeUnitsforC;
 }
 
+/*
+ * P, c and T of (rho, u) from one lookup (ANEOSLocateRhoU). rho outside the table: *T = T_min,
+ * *c and the return value ANEOS_FAIL_VALUE, counted once; the separate calls give the same values.
+ */
 double ANEOSPCTofRhoU(ANEOSMATERIAL *material, double rho, double u, double *c, double *T)
 {
-    double rho_cgs = rho * material->CodeUnitstoCGSforRho;
-    double u_cgs   = u   * material->CodeUnitstoCGSforU;
     INTERPCELL cell;
 
-    /* rho outside the table: nothing can be evaluated. Same results as the
-     * separate calls (TofRhoU fallback, PofRhoT/CofRhoT sentinel). */
-    if (interpLocateAxis(material->rhoAxis, material->nRho, rho_cgs, ANEOS_EDGE_TOL, &cell.ix, &cell.u) != INTERP_SUCCESS) {
-        material->nLookupFail++;
-        ANEOS_WARN("ANEOSPCTofRhoU: rho = %.15e outside table for u = %.15e\n", rho, u);
-        *T = material->TAxis[0];
+    if (ANEOSLocateRhoU(material, __func__, rho, u, &cell, T)) {
         *c = ANEOS_FAIL_VALUE;
         return ANEOS_FAIL_VALUE;
     }
-
-    if (interpInvertLine(&material->grid, material->uData, INTERP_ALONG_Y, cell.ix, cell.u, u_cgs,
-                         &ANEOSInvertOpt, &cell.iy, &cell.v) != INTERP_SUCCESS) {
-        /* Fallback, by contract: the lowest tabulated temperature, i.e. cell iy = 0, v = 0. */
-        material->nLookupFail++;
-        ANEOS_WARN("ANEOSPCTofRhoU: T(rho,u) failed for rho = %.15e, u = %.15e, falling back to T = %.15e\n",
-                   rho, u, material->TAxis[0]);
-        cell.iy = 0;
-        cell.v = 0.0;
-    }
-
-    *T = interpLineCoord(&material->grid, INTERP_ALONG_Y, cell.iy, cell.v);
     *c = interpCellValue(&material->grid, material->cData, &cell) * material->CGStoCodeUnitsforC;
     return interpCellValue(&material->grid, material->pData, &cell) * material->CGStoCodeUnitsforP;
 }
@@ -1038,9 +1063,18 @@ double ANEOSPCTofRhoU(ANEOSMATERIAL *material, double rho, double u, double *c, 
  */
 int ANEOSPhaseofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
-    double T = ANEOSTofRhoU(material,rho,u);
-    int phase = ANEOSPhaseofRhoT(material, rho, T);
-    return phase;
+    INTERPCELL cell;
+    double T;
+
+    if (material->PhaseArray == NULL) {
+        material->nLookupFail++;
+        ANEOS_WARN("ANEOSPhaseofRhoU: no extended EOS table loaded for material %d.\n", material->iMat);
+        return -1;
+    }
+    if (ANEOSLocateRhoU(material, __func__, rho, u, &cell, &T)) return -1;
+
+    /* The node nearest to the state in its cell; exactly halfway the lower node wins (interpNearest). */
+    return material->phaseData[(size_t) (cell.ix + (cell.u > 0.5)) * material->nT + (cell.iy + (cell.v > 0.5))];
 }
 
 /*
@@ -1074,22 +1108,30 @@ int ANEOSPhaseofRhoT(ANEOSMATERIAL *material, double rho, double T)
  * u(rho2, TAxis[0]) when S lies below the s(T) line at rho2 (the same
  * convention ANEOSTofRhoU uses for sub-table states), to the top row
  * u(rho2, TAxis[nT-1]) when it lies above (a hot state compressed beyond the
- * table; scvheosIsentropicU does the same). Both clamps are counted in
- * nLookupFail. Returns -1e50 only if rho2 itself is outside the table.
+ * table; scvheosIsentropicU does the same). If rho1 is outside the table
+ * the cold curve at rho2 is used. A call counts at most once in nLookupFail,
+ * however many of these steps fall back. Returns -1e50 only if rho2 itself
+ * is outside the table.
  */
 double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double rho2)
 {
     const double rho2_cgs = rho2*material->CodeUnitstoCGSforRho;
-    double oldT = ANEOSTofRhoU(material,rho1,u1);
-    double oldS, newT;
+    const long nLookupFail0 = material->nLookupFail;
+    double oldT, oldS, newT, u2;
+    int bClamp = 0;
     INTERPCELL cell;
 
-    if (interpValue(&material->grid, material->sData, rho1*material->CodeUnitstoCGSforRho, oldT, ANEOS_EDGE_TOL, &oldS) != INTERP_SUCCESS) {
-        material->nLookupFail++;
-        ANEOS_WARN("ANEOSisentropicU oldS failed for rho1 = %.15e, u1 = %.15e, rho2 = %.15e, using cold curve at rho2\n", rho1, u1, rho2);
+    if (ANEOSLocateRhoU(material, __func__, rho1, u1, &cell, &oldT)) {
+        /* rho1 outside the table (counted): no entropy, so the cold curve at rho2. */
         newT = material->TAxis[0];
-    } else if (interpInvertY(&material->grid, material->sData, rho2_cgs, oldS,
-                             ANEOS_EDGE_TOL, &ANEOSInvertOpt, &cell, &newT) != INTERP_SUCCESS) {
+        oldS = 0.0;
+    } else {
+        /* The entropy in the cell of (rho1, u1), then the T of that entropy at rho2. */
+        oldS = interpCellValue(&material->grid, material->sData, &cell);
+        bClamp = (interpInvertY(&material->grid, material->sData, rho2_cgs, oldS,
+                                ANEOS_EDGE_TOL, &ANEOSInvertOpt, &cell, &newT) != INTERP_SUCCESS);
+    }
+    if (bClamp) {
         /*
          * S is not attained on the s(T) line at rho2. The tolerant inversion scans every segment,
          * so S lies below the line's minimum or above its maximum. The top row is not above the
@@ -1109,7 +1151,14 @@ double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double 
     }
 
     /* ANEOSUofRhoT returns -1e50 if rho2 is outside the table. */
-    return ANEOSUofRhoT(material,rho2,newT);
+    u2 = ANEOSUofRhoT(material,rho2,newT);
+
+    /*
+     * One call, one count: a fallback at rho1, a clamp at rho2 and a failure at rho2 are steps of
+     * the same evaluation (up to 1.2.0 rho1 and rho2 outside the table counted 3).
+     */
+    if (material->nLookupFail > nLookupFail0) material->nLookupFail = nLookupFail0 + 1;
+    return u2;
 }
 
 /*
@@ -1117,9 +1166,10 @@ double ANEOSisentropicU(ANEOSMATERIAL *material, double rho1, double u1, double 
  */
 double ANEOSSofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
-    double T = ANEOSTofRhoU(material, rho, u);
-    double S = ANEOSSofRhoT(material, rho, T);
-    return S;
+    INTERPCELL cell;
+    double T;
+    if (ANEOSLocateRhoU(material, __func__, rho, u, &cell, &T)) return ANEOS_FAIL_VALUE;
+    return interpCellValue(&material->grid, material->sData, &cell);   /* cgs, see ANEOSSofRhoT */
 }
 
 /*
@@ -1212,14 +1262,19 @@ static int ANEOSPartialsCGS(ANEOSMATERIAL *material, double rho, double T,
 double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
     double dPdrho_T, dPdT_rho, dudrho_T, dudT_rho;
-    double T = ANEOSTofRhoU(material, rho, u);
+    const long nLookupFail0 = material->nLookupFail;
+    double T;
+    INTERPCELL cell;
 
-    if (ANEOSPartialsCGS(material, rho, T, &dPdrho_T, &dPdT_rho, &dudrho_T, &dudT_rho)) {
-        return ANEOS_FAIL_VALUE;
-    }
+    /* Partials of the interpolant in the cell of the state (ANEOSLocateRhoU). */
+    if (ANEOSLocateRhoU(material, __func__, rho, u, &cell, &T)) return ANEOS_FAIL_VALUE;
+    interpCellGradient(&material->grid, material->pData, &cell, &dPdrho_T, &dPdT_rho);
+    interpCellGradient(&material->grid, material->uData, &cell, &dudrho_T, &dudT_rho);
     if (!(dudT_rho > 0.0)) {
         /* Heat capacity must be positive; a non-positive du/dT is a table artefact. */
-        material->nLookupFail++;
+        /* Counted once per call: not again after a T fallback (the cold rows of M-ANEOS tables have
+         * du/dT <= 0, so a state above or below the column fails here as well). */
+        material->nLookupFail = nLookupFail0 + 1;
         ANEOS_WARN("ANEOSdPdRhoofRhoU: du/dT|rho = %.15e <= 0 at rho = %.15e, T = %.15e\n", dudT_rho, rho, T);
         return ANEOS_FAIL_VALUE;
     }
@@ -1238,13 +1293,18 @@ double ANEOSdPdRhoofRhoU(ANEOSMATERIAL *material, double rho, double u)
 double ANEOSdPdUofRhoU(ANEOSMATERIAL *material, double rho, double u)
 {
     double dPdrho_T, dPdT_rho, dudrho_T, dudT_rho;
-    double T = ANEOSTofRhoU(material, rho, u);
+    const long nLookupFail0 = material->nLookupFail;
+    double T;
+    INTERPCELL cell;
 
-    if (ANEOSPartialsCGS(material, rho, T, &dPdrho_T, &dPdT_rho, &dudrho_T, &dudT_rho)) {
-        return ANEOS_FAIL_VALUE;
-    }
+    /* Partials of the interpolant in the cell of the state (ANEOSLocateRhoU). */
+    if (ANEOSLocateRhoU(material, __func__, rho, u, &cell, &T)) return ANEOS_FAIL_VALUE;
+    interpCellGradient(&material->grid, material->pData, &cell, &dPdrho_T, &dPdT_rho);
+    interpCellGradient(&material->grid, material->uData, &cell, &dudrho_T, &dudT_rho);
     if (!(dudT_rho > 0.0)) {
-        material->nLookupFail++;
+        /* Counted once per call: not again after a T fallback (the cold rows of M-ANEOS tables have
+         * du/dT <= 0, so a state above or below the column fails here as well). */
+        material->nLookupFail = nLookupFail0 + 1;
         ANEOS_WARN("ANEOSdPdUofRhoU: du/dT|rho = %.15e <= 0 at rho = %.15e, T = %.15e\n", dudT_rho, rho, T);
         return ANEOS_FAIL_VALUE;
     }

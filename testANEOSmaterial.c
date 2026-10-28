@@ -730,6 +730,21 @@ static void testFailureContract(ANEOSMATERIAL *m)
         CHECK(ANEOSdUdRhoofRhoU(m, rhoHi, 1.0) == ANEOS_FAIL_VALUE, "dUdRho above rhoMax = %g", ANEOSdUdRhoofRhoU(m, rhoHi, 1.0));
         CHECK(ANEOSdUdRhoofRhoU(m, rhoLo, 1.0) == ANEOS_FAIL_VALUE, "dUdRho below rhoMin = %g", ANEOSdUdRhoofRhoU(m, rhoLo, 1.0));
         CHECK(ANEOSdUdRhoofRhoU(m, 1e6, 1.0) == ANEOS_FAIL_VALUE, "dUdRho at rho = 1e6 (code units) = %g", ANEOSdUdRhoofRhoU(m, 1e6, 1.0));
+        /* Once per call (a density outside the table counted 2 up to 1.2.0: T fallback + lookup). */
+        long nf = m->nLookupFail;
+        (void) ANEOSdUdRhoofRhoU(m, rhoHi, 1.0);
+        CHECK(m->nLookupFail == nf + 1, "dUdRho failure counted %ld times", m->nLookupFail - nf);
+        nf = m->nLookupFail;
+        (void) ANEOSPofRhoU(m, rhoHi, 1.0);
+        (void) ANEOSCofRhoU(m, rhoHi, 1.0);
+        (void) ANEOSSofRhoU(m, rhoHi, 1.0);
+        (void) ANEOSdPdRhoofRhoU(m, rhoHi, 1.0);
+        (void) ANEOSdPdUofRhoU(m, rhoHi, 1.0);
+        (void) ANEOSPhaseofRhoU(m, rhoHi, 1.0);
+        CHECK(m->nLookupFail == nf + 6, "six (rho, u) calls above rhoMax counted %ld times", m->nLookupFail - nf);
+        nf = m->nLookupFail;
+        (void) ANEOSisentropicU(m, rhoHi, 1.0, rhoHi);
+        CHECK(m->nLookupFail == nf + 1, "isentrope with rho1 and rho2 above rhoMax counted %ld times", m->nLookupFail - nf);
         CHECK(ANEOSdPdRhoofRhoU(m, rhoHi, 1.0) == ANEOS_FAIL_VALUE, "dPdRho(rho, u) above rhoMax");
         CHECK(ANEOSdPdUofRhoU(m, rhoHi, 1.0) == ANEOS_FAIL_VALUE, "dPdU(rho, u) above rhoMax");
     }

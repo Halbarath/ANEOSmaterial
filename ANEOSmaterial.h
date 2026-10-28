@@ -72,6 +72,14 @@
  *          needs no melt curve and stays 0 (it became -1 as well).
  *          ANEOSdUdRhoofRhoU returns ANEOS_FAIL_VALUE for a failed P (it returned
  *          -1e50/rho^2, which is not the sentinel and for rho > 1e5 not ANEOSFailed).
+ *          The (rho, u) functions (T, P, c, s, phase, the derivatives, the isentrope)
+ *          evaluate in the cell of one shared lookup like ANEOSPCTofRhoU: one search
+ *          instead of two, and a call counts at most once in nLookupFail (a density
+ *          outside the table counted twice, in the isentrope up to three times; the
+ *          derivatives also counted a T fallback onto a cold row with du/dT <= 0 twice).
+ *          P, c, s and the derivatives can differ from 1.2.0 in the last bits (no
+ *          second locate from T); at a node of the T axis the derivatives are taken
+ *          in the cell of the inversion, where they could come from the cell above.
  */
 #define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1
@@ -144,8 +152,9 @@
  * back to TAxis[0], the lowest tabulated temperature, and all (rho, u)
  * functions then evaluate at (rho, T_min). The phase lookups return -1.
  *
- * Every failure and every fallback is counted in nLookupFail and reported
- * on stderr only when the library is compiled with -DEOSLIB_VERBOSE
+ * Every failure and every fallback is counted in nLookupFail, once per call
+ * (a call that fails or falls back counts 1, however many of its steps do),
+ * and reported on stderr only when the library is compiled with -DEOSLIB_VERBOSE
  * (ANEOS_WARN). Test a returned value with ANEOSFailed(x) (true for the
  * sentinel and for NaN); EOSlib exposes the same test as EOSFailed().
  * Errors during initialisation (missing or defective table: short read,
