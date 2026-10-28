@@ -42,13 +42,25 @@
  *   Cell (ix, iy) is the rectangle [x[ix], x[ix+1]] x [y[iy], y[iy+1]],
  *   0 <= ix <= nx-2, 0 <= iy <= ny-2, with local coordinates (u, v) in
  *   [0, 1]^2. Both intervals are CLOSED: x == x[nx-1] gives the last cell
- *   with u == 1. A roundoff tolerance tol, relative to the bound being
- *   tested, accepts and clamps coordinates within tol*|axis[0]| below the
- *   first node and tol*|axis[n-1]| above the last one, so that a state on
- *   the table edge survives a unit-conversion or 10^x <-> log10 round
- *   trip; tol = 0 disables that. The tolerance is deliberately not
- *   absolute: a linear axis may start at 1e-25 and a log axis at -25, and
- *   a bound that is exactly 0 simply gets no tolerance.
+ *   with u == 1. A roundoff tolerance accepts and clamps coordinates within
+ *   a band of
+ *
+ *     tol * |bound| + tolAbs
+ *
+ *   outside the first and the last node, so that a state on the table edge
+ *   survives a unit conversion or a 10^x <-> log10 round trip. The two parts
+ *   model the two kinds of axis:
+ *     - a linear axis (ANEOSmaterial: rho, T) carries a relative roundoff,
+ *       tol relative to the bound and tolAbs = 0; an absolute part would be
+ *       wrong there (a density axis may start at 1e-25);
+ *     - a log axis (scvheos, reos3: log10 rho, log10 T) carries the roundoff
+ *       of log10(10^x), which is absolute (~1e-16) plus relative to |x|, so
+ *       those libraries pass tolAbs > 0 as well. With tol alone a log bound
+ *       at or near 0, which an arbitrary code-unit shift of log rho can
+ *       produce, got no tolerance at all (up to 1.0.3).
+ *   The functions taking one tol use tolAbs = 0; the *Tol variants
+ *   (interpLocateAxisTol, interpLocateTol, interpInvertYTol, interpInvertXTol)
+ *   take both. tol = tolAbs = 0 disables the tolerance.
  *
  *   The interpolant is C0; on a cell boundary the cell to the right/above
  *   is used (the last cell at the upper edge), so derivatives there are
@@ -69,6 +81,12 @@
  *   1.0.3  INTERP_ABI_VERSION, the layout version of the public types, so that the
  *          libraries vendoring this header can detect a copy with another layout in
  *          the same translation unit (see below). No change in behaviour.
+ *          Edge tolerance band tol*|bound| + tolAbs: new interpLocateAxisTol,
+ *          interpLocateTol, interpInvertYTol and interpInvertXTol with an absolute
+ *          part for log axes (a log bound at 0 got no tolerance). The functions
+ *          with one tol are unchanged (tolAbs = 0); the types and
+ *          INTERP_ABI_VERSION are unchanged. New API: when the version is bumped
+ *          (1.1.0), scvheos and reos3, which call the *Tol variants, must require it.
  */
 #ifndef INTERPBILINEAR_HINCLUDED
 #define INTERPBILINEAR_HINCLUDED
@@ -213,20 +231,21 @@ static inline int interpFindIndex(double x, const double *axis, int n)
 
 /*
  * Locate x on the closed interval [axis[0], axis[n-1]] with the roundoff
- * tolerance tol relative to each bound (see the header comment). Returns
- * INTERP_SUCCESS with the segment index *pi (0 <= i <= n-2) and the local
- * coordinate *pw in [0, 1]; INTERP_BELOW or INTERP_ABOVE if x is outside by
- * more than the tolerance; INTERP_INVALID for a NaN. Outputs are untouched
+ * tolerance band tol*|bound| + tolAbs at each bound (see the header comment).
+ * Returns INTERP_SUCCESS with the segment index *pi (0 <= i <= n-2) and the
+ * local coordinate *pw in [0, 1]; INTERP_BELOW or INTERP_ABOVE if x is outside
+ * by more than the tolerance; INTERP_INVALID for a NaN. Outputs are untouched
  * on failure.
  */
-static inline int interpLocateAxis(const double *axis, int n, double x, double tol, int *pi, double *pw)
+static inline int interpLocateAxisTol(const double *axis, int n, double x, double tol, double tolAbs,
+                                      int *pi, double *pw)
 {
     const double lo = axis[0], hi = axis[n - 1];
     int i;
 
     if (x != x) return INTERP_INVALID;
-    if (!(x >= lo)) { if (x >= lo - tol * fabs(lo)) x = lo; else return INTERP_BELOW; }
-    if (!(x <= hi)) { if (x <= hi + tol * fabs(hi)) x = hi; else return INTERP_ABOVE; }
+    if (!(x >= lo)) { if (x >= lo - (tol * fabs(lo) + tolAbs)) x = lo; else return INTERP_BELOW; }
+    if (!(x <= hi)) { if (x <= hi + (tol * fabs(hi) + tolAbs)) x = hi; else return INTERP_ABOVE; }
 
     i = interpFindIndex(x, axis, n);
     *pi = i;
@@ -234,23 +253,29 @@ static inline int interpLocateAxis(const double *axis, int n, double x, double t
     return INTERP_SUCCESS;
 }
 
+/* Same with a tolerance relative to the bound only (linear axes). */
+static inline int interpLocateAxis(const double *axis, int n, double x, double tol, int *pi, double *pw)
+{
+    return interpLocateAxisTol(axis, n, x, tol, 0.0, pi, pw);
+}
+
 /*
- * Locate (x, y) on the grid. Returns INTERP_SUCCESS and fills *cell, or one
- * of INTERP_OUTSIDE_XMIN/XMAX/YMIN/YMAX (x is checked first), or
- * INTERP_INVALID for a NaN.
+ * Locate (x, y) on the grid with the edge tolerance band tol*|bound| + tolAbs.
+ * Returns INTERP_SUCCESS and fills *cell, or one of INTERP_OUTSIDE_XMIN/XMAX/
+ * YMIN/YMAX (x is checked first), or INTERP_INVALID for a NaN.
  */
-static inline int interpLocate(const INTERPGRID *g, double x, double y, double tol, INTERPCELL *cell)
+static inline int interpLocateTol(const INTERPGRID *g, double x, double y, double tol, double tolAbs, INTERPCELL *cell)
 {
     int iret;
     int ix, iy;
     double u, v;
 
-    iret = interpLocateAxis(g->x, g->nx, x, tol, &ix, &u);
+    iret = interpLocateAxisTol(g->x, g->nx, x, tol, tolAbs, &ix, &u);
     if (iret == INTERP_BELOW) return INTERP_OUTSIDE_XMIN;
     if (iret == INTERP_ABOVE) return INTERP_OUTSIDE_XMAX;
     if (iret != INTERP_SUCCESS) return iret;
 
-    iret = interpLocateAxis(g->y, g->ny, y, tol, &iy, &v);
+    iret = interpLocateAxisTol(g->y, g->ny, y, tol, tolAbs, &iy, &v);
     if (iret == INTERP_BELOW) return INTERP_OUTSIDE_YMIN;
     if (iret == INTERP_ABOVE) return INTERP_OUTSIDE_YMAX;
     if (iret != INTERP_SUCCESS) return iret;
@@ -260,6 +285,12 @@ static inline int interpLocate(const INTERPGRID *g, double x, double y, double t
     cell->u = u;
     cell->v = v;
     return INTERP_SUCCESS;
+}
+
+/* Same with a tolerance relative to the bounds only (linear axes). */
+static inline int interpLocate(const INTERPGRID *g, double x, double y, double tol, INTERPCELL *cell)
+{
+    return interpLocateTol(g, x, y, tol, 0.0, cell);
 }
 
 /* -------------------------------------------------------------- evaluate */
@@ -526,20 +557,21 @@ static inline int interpInvertLine(const INTERPGRID *g, const double *z, int axi
 }
 
 /*
- * Solve z(x, y) = target for y at given x. Locates x (tolerance tol), then
+ * Solve z(x, y) = target for y at given x. Locates x (tolerance band
+ * tol*|bound| + tolAbs), then
  * inverts the line along y. On success fills *cell (so that other tables
  * can be evaluated in the same cell without a second search) and *py.
  *
  * Returns INTERP_OUTSIDE_XMIN/XMAX, INTERP_INVALID, or the status of
  * interpInvertLine.
  */
-static inline int interpInvertY(const INTERPGRID *g, const double *z, double x, double target, double tol,
-                                const INTERPINVERTOPT *opt, INTERPCELL *cell, double *py)
+static inline int interpInvertYTol(const INTERPGRID *g, const double *z, double x, double target, double tol,
+                                   double tolAbs, const INTERPINVERTOPT *opt, INTERPCELL *cell, double *py)
 {
     int ix, iy, iret;
     double u, v;
 
-    iret = interpLocateAxis(g->x, g->nx, x, tol, &ix, &u);
+    iret = interpLocateAxisTol(g->x, g->nx, x, tol, tolAbs, &ix, &u);
     if (iret == INTERP_BELOW) return INTERP_OUTSIDE_XMIN;
     if (iret == INTERP_ABOVE) return INTERP_OUTSIDE_XMAX;
     if (iret != INTERP_SUCCESS) return iret;
@@ -552,17 +584,24 @@ static inline int interpInvertY(const INTERPGRID *g, const double *z, double x, 
     return INTERP_SUCCESS;
 }
 
+/* Same with a tolerance relative to the bounds only (linear axes). */
+static inline int interpInvertY(const INTERPGRID *g, const double *z, double x, double target, double tol,
+                                const INTERPINVERTOPT *opt, INTERPCELL *cell, double *py)
+{
+    return interpInvertYTol(g, z, x, target, tol, 0.0, opt, cell, py);
+}
+
 /*
  * Solve z(x, y) = target for x at given y. Mirror image of interpInvertY;
  * returns INTERP_OUTSIDE_YMIN/YMAX if y is outside the grid.
  */
-static inline int interpInvertX(const INTERPGRID *g, const double *z, double y, double target, double tol,
-                                const INTERPINVERTOPT *opt, INTERPCELL *cell, double *px)
+static inline int interpInvertXTol(const INTERPGRID *g, const double *z, double y, double target, double tol,
+                                   double tolAbs, const INTERPINVERTOPT *opt, INTERPCELL *cell, double *px)
 {
     int ix, iy, iret;
     double u, v;
 
-    iret = interpLocateAxis(g->y, g->ny, y, tol, &iy, &v);
+    iret = interpLocateAxisTol(g->y, g->ny, y, tol, tolAbs, &iy, &v);
     if (iret == INTERP_BELOW) return INTERP_OUTSIDE_YMIN;
     if (iret == INTERP_ABOVE) return INTERP_OUTSIDE_YMAX;
     if (iret != INTERP_SUCCESS) return iret;
@@ -573,6 +612,13 @@ static inline int interpInvertX(const INTERPGRID *g, const double *z, double y, 
     cell->ix = ix; cell->iy = iy; cell->u = u; cell->v = v;
     *px = interpLineCoord(g, INTERP_ALONG_X, ix, u);
     return INTERP_SUCCESS;
+}
+
+/* Same with a tolerance relative to the bounds only (linear axes). */
+static inline int interpInvertX(const INTERPGRID *g, const double *z, double y, double target, double tol,
+                                const INTERPINVERTOPT *opt, INTERPCELL *cell, double *px)
+{
+    return interpInvertXTol(g, z, y, target, tol, 0.0, opt, cell, px);
 }
 
 /* ------------------------------------------------------- node derivatives */

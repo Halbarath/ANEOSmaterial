@@ -13,8 +13,8 @@ several of them end up in one binary.
 ## What it does
 
 * locate a point on the grid (closed intervals, optional roundoff tolerance
-  at the edges), evaluate the bilinear interpolant and its two partial
-  derivatives in that cell;
+  at the edges, see below), evaluate the bilinear interpolant and its two
+  partial derivatives in that cell;
 * invert the interpolant along one axis at a fixed coordinate on the other
   (T(rho, u), rho(P, T), ...), in two modes: *strict*, which assumes a
   monotonic line and reports a non-monotonic one, and *tolerant*, which
@@ -37,6 +37,45 @@ contract.
 Layout: a table is one contiguous block, x-major, `z[ix*ny + iy]`, with the
 inner index `iy` contiguous. In the EOS libraries x is rho and y is T.
 
+## Edge tolerance
+
+The table intervals are closed, and a coordinate slightly outside the first
+or last node is accepted and clamped onto it if it lies within the band
+
+    tol * |bound| + tolAbs
+
+so that a state on the table edge survives a unit conversion or a
+`10^x <-> log10` round trip. The two parts match the two kinds of axis:
+
+* a **linear axis** (ANEOSmaterial: rho, T) carries a relative roundoff, so
+  it takes `tol` relative to the bound and `tolAbs = 0`. An absolute part
+  would be wrong there: a density axis may start at 1e-25.
+* a **log axis** (scvheos, reos3: log10 rho, log10 T) carries the roundoff of
+  `log10(10^x)`, which is absolute (~1e-16) as well as relative to |x|, so
+  these libraries pass `tolAbs > 0` too (`SCVHEOS_EDGE_TOL_ABS`,
+  `REOS3_EDGE_TOL_ABS`). Without it a log bound at or near 0, which the
+  arbitrary code-unit shift of log rho can produce, gets no tolerance at all,
+  and a table-edge state is rejected for about half of all unit choices.
+
+The functions taking a single `tol` (`interpLocateAxis`, `interpLocate`,
+`interpValue`, `interpGradient`, `interpNearest`, `interpInvertY`,
+`interpInvertX`) use `tolAbs = 0`. The `*Tol` variants take both parts:
+
+| one `tol` (tolAbs = 0) | both parts |
+|---|---|
+| `interpLocateAxis` | `interpLocateAxisTol` |
+| `interpLocate` | `interpLocateTol` |
+| `interpInvertY` | `interpInvertYTol` |
+| `interpInvertX` | `interpInvertXTol` |
+
+The single-`tol` functions are the `*Tol` variants with `tolAbs = 0`, bit for
+bit (the test suite checks this), so the linear-axis consumers are unaffected.
+`tol = tolAbs = 0` disables the tolerance.
+
+The inversions have their own tolerances on the target value (`valTol`,
+`edgeTol`, `nodeTol` in `INTERPINVERTOPT`, see the header); the edge
+tolerance above applies to the coordinate that is located first.
+
 ## Test
 
     make test
@@ -44,9 +83,12 @@ inner index `iy` contiguous. In the EOS libraries x is rho and y is T.
 builds and runs `testInterpBilinear`, which needs no table files: it
 checks the arithmetic on synthetic grids (a globally bilinear function
 reproduced to roundoff, inversion round trips in both modes, constructed
-defects producing the documented status codes), and that the public types
-still have the layout of `INTERP_ABI_VERSION` (see below). The exit status
-is the number of failed checks.
+defects producing the documented status codes), the edge tolerance band on
+the kinds of axis the consumers use (a linear axis starting at 1e-25, log
+axes with a bound at 0, a log axis shifted to 0 by a unit conversion), that
+the single-`tol` functions equal the `*Tol` variants with `tolAbs = 0`, and
+that the public types still have the layout of `INTERP_ABI_VERSION` (see
+below). The exit status is the number of failed checks.
 
 ## Using it from another repository
 
@@ -97,6 +139,14 @@ unit stops the compilation instead of making EOSlib and the library read
 the same struct differently. After a layout change, pull the new copy into
 every consumer and raise its `*_INTERP_ABI_VERSION` (and the required
 version) in the same commit.
+
+A consumer that calls a function added in a later release (as scvheos and
+reos3 call the `*Tol` variants) must also raise its required version to that
+release: in EOSlib the copy in effect may be another consumer's, and an older
+copy would otherwise fail with an undeclared function instead of the clear
+version error. New functions without a layout change raise the minor version
+(the `*Tol` variants: 1.1.0) and leave `INTERP_ABI_VERSION` alone. Pull the
+new copy into all three consumers together.
 
 ## License
 

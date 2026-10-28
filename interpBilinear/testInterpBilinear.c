@@ -22,7 +22,10 @@
  * the arithmetic, not any particular material. Every check is an invariant
  * of the interpolant: a globally bilinear function must be reproduced to
  * roundoff, inversions must round-trip, and constructed defects (a dip, a
- * plateau, an edge overshoot) must produce the documented status codes.
+ * plateau, an edge overshoot) must produce the documented status codes. The
+ * edge tolerance band tol*|bound| + tolAbs is tested on axes like those of the
+ * consumers: a linear axis starting at 1e-25 (ANEOS) and log axes with a bound
+ * at 0 (scvheos, reos3 after an arbitrary code-unit shift of log rho).
  *
  * Usage: testInterpBilinear. Exit status is the number of failed checks.
  */
@@ -150,8 +153,9 @@ static void testLocate(void)
     CHECK(interpLocateAxis(xAxis, NX, -INFINITY, 1e-13, &i, &w) == INTERP_BELOW, "-inf");
     CHECK(interpLocateAxis(xAxis, NX, INFINITY, 1e-13, &i, &w) == INTERP_ABOVE, "+inf");
     CHECK(interpLocateAxis(xAxis, NX, NAN, 1e-13, &i, &w) == INTERP_INVALID, "NaN");
-    /* The tolerance is relative to the bound, never absolute: on an axis
-     * starting at 1e-25 (the ANEOS tables) half the first node is far out. */
+    /* With one tol the tolerance is relative to the bound only (tolAbs = 0, the
+     * linear axes): on an axis starting at 1e-25 (the ANEOS tables) half the
+     * first node is far out. The absolute part is tested in testLocateTol. */
     {
         static const double tiny[3] = { 1e-25, 1e-20, 1e-15 };
         CHECK(interpLocateAxis(tiny, 3, 0.5e-25, 1e-13, &i, &w) == INTERP_BELOW, "tiny axis: half the first node is below");
@@ -172,6 +176,116 @@ static void testLocate(void)
     CHECK(interpLocate(&G, 0.5 * xAxis[0], 2.0 * yAxis[NY-1], 0.0, &c) == INTERP_OUTSIDE_XMIN, "x before y");
     CHECK(interpLocate(&G, xAxis[3], NAN, 0.0, &c) == INTERP_INVALID, "NaN y");
     CHECK(interpLocate(&G, xAxis[NX-1], yAxis[NY-1], 0.0, &c) == INTERP_SUCCESS && c.ix == NX - 2 && c.iy == NY - 2 && c.u == 1.0 && c.v == 1.0, "top corner");
+    END_TEST();
+}
+
+/*
+ * The edge tolerance band tol*|bound| + tolAbs (interpLocateAxisTol and the other *Tol variants).
+ * A log axis carries the absolute roundoff of log10(10^x), so scvheos and reos3 pass tolAbs > 0;
+ * with the relative part alone a log bound at 0 got no tolerance (up to 1.0.3). The functions with
+ * one tol are the *Tol variants with tolAbs = 0, bit for bit, so the linear axes of ANEOSmaterial
+ * are unchanged.
+ */
+static void testLocateTol(void)
+{
+    int failsBefore = nFails;
+    static const INTERPINVERTOPT strict = INTERP_INVERT_STRICT;
+    const double tol = 1e-13, tolAbs = 1e-13;   /* SCVHEOS_EDGE_TOL(_ABS), REOS3_EDGE_TOL(_ABS) */
+    int i = 0, n;
+    double w = 0.0;
+    TEST("edge tolerance band tol*|bound| + tolAbs (*Tol variants)");
+
+    /* A log axis ending at 0 and one starting at 0: a few ulps outside are clamped with tolAbs, not without. */
+    {
+        static const double up[4] = { -3.0, -2.0, -1.0, 0.0 }, lo[4] = { 0.0, 1.0, 2.0, 3.0 };
+        CHECK(interpLocateAxis(up, 4, 2.2e-16, tol, &i, &w) == INTERP_ABOVE, "bound 0, relative tolerance only: no band");
+        CHECK(interpLocateAxisTol(up, 4, 2.2e-16, tol, tolAbs, &i, &w) == INTERP_SUCCESS && i == 2 && w == 1.0, "bound 0 from above: clamped");
+        CHECK(interpLocateAxis(lo, 4, -2.2e-16, tol, &i, &w) == INTERP_BELOW, "bound 0 from below, relative only: no band");
+        CHECK(interpLocateAxisTol(lo, 4, -2.2e-16, tol, tolAbs, &i, &w) == INTERP_SUCCESS && i == 0 && w == 0.0, "bound 0 from below: clamped");
+        /* The band is tolAbs at a bound of 0: just inside and just outside it. */
+        CHECK(interpLocateAxisTol(lo, 4, -0.9 * tolAbs, tol, tolAbs, &i, &w) == INTERP_SUCCESS, "inside the absolute band");
+        CHECK(interpLocateAxisTol(lo, 4, -1.1 * tolAbs, tol, tolAbs, &i, &w) == INTERP_BELOW, "outside the absolute band");
+        CHECK(interpLocateAxisTol(up, 4, 1.1 * tolAbs, tol, tolAbs, &i, &w) == INTERP_ABOVE, "outside the absolute band (above)");
+        /* A clearly outside value still fails, NaN is still invalid, outputs untouched on failure. */
+        CHECK(interpLocateAxisTol(lo, 4, -1e-10, tol, tolAbs, &i, &w) == INTERP_BELOW, "1e-10 outside");
+        CHECK(interpLocateAxisTol(lo, 4, NAN, tol, tolAbs, &i, &w) == INTERP_INVALID, "NaN");
+        i = -7; w = -7.0;
+        interpLocateAxisTol(lo, 4, -1e-10, tol, tolAbs, &i, &w);
+        CHECK(i == -7 && w == -7.0, "outputs touched on failure");
+    }
+    /* The two parts add: at a bound b the band is tol*|b| + tolAbs. */
+    {
+        static const double ax[3] = { -25.0, -10.0, 5.0 };
+        const double bandLo = tol * 25.0 + tolAbs, bandHi = tol * 5.0 + tolAbs;
+        CHECK(interpLocateAxisTol(ax, 3, -25.0 - 0.9 * bandLo, tol, tolAbs, &i, &w) == INTERP_SUCCESS && i == 0 && w == 0.0, "within tol*|b| + tolAbs below");
+        CHECK(interpLocateAxisTol(ax, 3, -25.0 - 1.1 * bandLo, tol, tolAbs, &i, &w) == INTERP_BELOW, "beyond tol*|b| + tolAbs below");
+        CHECK(interpLocateAxisTol(ax, 3, 5.0 + 0.9 * bandHi, tol, tolAbs, &i, &w) == INTERP_SUCCESS && i == 1 && w == 1.0, "within tol*|b| + tolAbs above");
+        CHECK(interpLocateAxisTol(ax, 3, 5.0 + 1.1 * bandHi, tol, tolAbs, &i, &w) == INTERP_ABOVE, "beyond tol*|b| + tolAbs above");
+        /* Between tol*|b| and tol*|b| + tolAbs: the sum accepts, the relative part alone rejects. */
+        CHECK(interpLocateAxisTol(ax, 3, -25.0 - (tol * 25.0 + 0.5 * tolAbs), tol, tolAbs, &i, &w) == INTERP_SUCCESS, "inside the sum");
+        CHECK(interpLocateAxis(ax, 3, -25.0 - (tol * 25.0 + 0.5 * tolAbs), tol, &i, &w) == INTERP_BELOW, "relative part alone is narrower");
+    }
+    /* A log axis whose bound lands within roundoff of 0 after a unit shift (log rho_code = log rho_cgs
+     * - log10(GmPerCc)): states on the edge converted from cgs are accepted for every shift. */
+    {
+        int nRel = 0, nTol = 0, nTried = 0;
+        for (n = -200; n <= 200; n++) {
+            const double logEdgeCGS = 2.6987, shift = logEdgeCGS * (1.0 + n * 1e-15);
+            const double axis[3] = { logEdgeCGS - 4.0 - shift, logEdgeCGS - 2.0 - shift, logEdgeCGS - shift };   /* ends at ~0 */
+            const double x = log10(pow(10.0, logEdgeCGS) / pow(10.0, shift));   /* the edge, as a code would hold it */
+            nTried++;
+            if (interpLocateAxis(axis, 3, x, tol, &i, &w) != INTERP_SUCCESS) nRel++;
+            if (interpLocateAxisTol(axis, 3, x, tol, tolAbs, &i, &w) != INTERP_SUCCESS) nTol++;
+        }
+        CHECK(nTol == 0, "edge after a unit shift rejected for %d of %d shifts with tolAbs", nTol, nTried);
+        CHECK(nRel > 0, "the relative tolerance alone never failed (%d shifts): the test does not reach the case", nTried);
+    }
+    /* Grid functions: a log grid with the x axis ending at 0 and the y axis starting at 0. */
+    {
+        static double lx[NX], ly[NY], zl[NX * NY];
+        INTERPGRID L = { NX, NY, lx, ly };
+        INTERPCELL c = { 0, 0, 0.0, 0.0 };
+        double r = 0.0, z = 0.0;
+        for (i = 0; i < NX; i++) lx[i] = -4.0 + 4.0 * i / (NX - 1);   /* ..., 0 */
+        for (n = 0; n < NY; n++) ly[n] = 6.0 * n / (NY - 1);           /* 0, ... */
+        lx[NX - 1] = 0.0; ly[0] = 0.0;
+        for (i = 0; i < NX; i++) for (n = 0; n < NY; n++) zl[i * NY + n] = 1.0 + 0.3 * lx[i] + 0.7 * ly[n];   /* increasing in both */
+        CHECK(interpLocate(&L, 2.2e-16, 1.0, tol, &c) == INTERP_OUTSIDE_XMAX, "interpLocate: x bound 0, no band");
+        CHECK(interpLocateTol(&L, 2.2e-16, 1.0, tol, tolAbs, &c) == INTERP_SUCCESS && c.ix == NX - 2 && c.u == 1.0, "interpLocateTol: x clamped");
+        CHECK(interpLocateTol(&L, -1.0, -2.2e-16, tol, tolAbs, &c) == INTERP_SUCCESS && c.iy == 0 && c.v == 0.0, "interpLocateTol: y clamped");
+        CHECK(interpLocateTol(&L, -1.0, -1e-10, tol, tolAbs, &c) == INTERP_OUTSIDE_YMIN, "interpLocateTol: y clearly below");
+        interpValue(&L, zl, 0.0, 2.0, 0.0, &z);
+        CHECK(interpInvertY(&L, zl, 2.2e-16, z, tol, &strict, &c, &r) == INTERP_OUTSIDE_XMAX, "interpInvertY: x bound 0, no band");
+        CHECK(interpInvertYTol(&L, zl, 2.2e-16, z, tol, tolAbs, &strict, &c, &r) == INTERP_SUCCESS && c.ix == NX - 2, "interpInvertYTol: x clamped");
+        CHECK_REL(r, 2.0, 1e-12, "interpInvertYTol at the clamped edge");
+        interpValue(&L, zl, -1.0, 0.0, 0.0, &z);
+        CHECK(interpInvertX(&L, zl, -2.2e-16, z, tol, &strict, &c, &r) == INTERP_OUTSIDE_YMIN, "interpInvertX: y bound 0, no band");
+        CHECK(interpInvertXTol(&L, zl, -2.2e-16, z, tol, tolAbs, &strict, &c, &r) == INTERP_SUCCESS && c.iy == 0, "interpInvertXTol: y clamped");
+        CHECK_REL(r, -1.0, 1e-12, "interpInvertXTol at the clamped edge");
+    }
+    /* The one-tol functions are the *Tol variants with tolAbs = 0, bit for bit, inside and outside. */
+    for (n = 0; n < 3000; n++) {
+        double x, y, z = 0.0, a = 0.0, b = 0.0;
+        int ia = -1, ib = -1, ra, rb;
+        double wa = -1.0, wb = -1.0;
+        INTERPCELL ca = { -1, -1, -1.0, -1.0 }, cb = { -1, -1, -1.0, -1.0 };
+        randomPoint(&x, &y);
+        if (n % 3 == 1) x = xAxis[0] * (1.0 - (n % 7) * 1e-15);        /* at and just below the edge */
+        if (n % 3 == 2) x = xAxis[NX-1] * (1.0 + (n % 7) * 1e-14);     /* just above, partly outside the band */
+        ra = interpLocateAxis(xAxis, NX, x, tol, &ia, &wa);
+        rb = interpLocateAxisTol(xAxis, NX, x, tol, 0.0, &ib, &wb);
+        CHECK(ra == rb && ia == ib && wa == wb, "interpLocateAxis != interpLocateAxisTol(tolAbs = 0) at x = %.17g", x);
+        ra = interpLocate(&G, x, y, tol, &ca);
+        rb = interpLocateTol(&G, x, y, tol, 0.0, &cb);
+        CHECK(ra == rb && ca.ix == cb.ix && ca.iy == cb.iy && ca.u == cb.u && ca.v == cb.v, "interpLocate != interpLocateTol(tolAbs = 0)");
+        interpValue(&G, zMono, fmin(fmax(x, xAxis[0]), xAxis[NX-1]), y, 0.0, &z);
+        ra = interpInvertY(&G, zMono, x, z, tol, &strict, &ca, &a);
+        rb = interpInvertYTol(&G, zMono, x, z, tol, 0.0, &strict, &cb, &b);
+        CHECK(ra == rb && (ra != INTERP_SUCCESS || (a == b && ca.ix == cb.ix && ca.iy == cb.iy && ca.v == cb.v)), "interpInvertY != interpInvertYTol(tolAbs = 0)");
+        ra = interpInvertX(&G, zMono, y, z, tol, &strict, &ca, &a);
+        rb = interpInvertXTol(&G, zMono, y, z, tol, 0.0, &strict, &cb, &b);
+        CHECK(ra == rb && (ra != INTERP_SUCCESS || (a == b && ca.ix == cb.ix && ca.iy == cb.iy && ca.u == cb.u)), "interpInvertX != interpInvertXTol(tolAbs = 0)");
+    }
     END_TEST();
 }
 
@@ -467,6 +581,7 @@ int main(void)
 
     testLayout();
     testLocate();
+    testLocateTol();
     testValue();
     testGradient();
     testNearest();
