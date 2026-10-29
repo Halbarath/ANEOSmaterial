@@ -1547,6 +1547,51 @@ static void testIsInTable(ANEOSMATERIAL *m)
 
 /* ------------------------------------------------------------------- main */
 
+/*
+ * Every u that u(rho, T) returns is in the table: ANEOSIsInTable(rho, u(rho, T)) == ANEOS_SUCCESS and
+ * P(rho, u) finds it without the T_min fallback. EOSSolveBCEval in EOSlib relies on this and skips
+ * EOSIsUsable for ANEOS. Checked on every column, including those with du/dT < 0 at the cold rows
+ * (the tolerant inversion finds every value the line attains), at the density and temperature
+ * nodes and at the table edges within roundoff.
+ */
+static void testUofRhoTInTable(ANEOSMATERIAL *m)
+{
+    int failsBefore = nFails;
+    long nStates = 0;
+    TEST("u(rho, T) is in the table, as EOSSolveBCEval assumes");
+    const double conv = m->CGStoCodeUnitsforRho;
+    const double TMin = m->TAxis[0], TMax = m->TAxis[m->nT-1];
+    const double TEdge[4] = { TMin, TMin * (1.0 + 1e-15), TMax * (1.0 - 1e-15), TMax };
+
+    for (int a = 0; a < NSAMPLE_RHO + m->nRho + 2; a++) {
+        double rho;
+        if (a < NSAMPLE_RHO) { if (a % 3) continue; rho = sampleRho(m, a); }
+        else if (a < NSAMPLE_RHO + m->nRho) rho = m->rhoAxis[a - NSAMPLE_RHO] * conv;
+        else if (a == NSAMPLE_RHO + m->nRho) rho = m->rhoAxis[0] * conv * (1.0 - 1e-15);
+        else rho = m->rhoAxis[m->nRho-1] * conv * (1.0 + 1e-15);
+
+        for (int b = 0; b < NSAMPLE_T + m->nT + 4; b++) {
+            double T, u, P;
+            long nf;
+            if (b < NSAMPLE_T) { if (b % 11) continue; T = sampleT(m, b); }
+            else if (b < NSAMPLE_T + m->nT) T = m->TAxis[b - NSAMPLE_T];
+            else T = TEdge[b - NSAMPLE_T - m->nT];
+
+            nf = m->nLookupFail;
+            u = ANEOSUofRhoT(m, rho, T);
+            if (ANEOSFailed(u)) { m->nLookupFail = nf; continue; }   /* outside within roundoff: not the case tested */
+            nStates++;
+            CHECK(ANEOSIsInTable(m, rho, u) == ANEOS_SUCCESS, "u(rho, T) not in the table at rho=%.17g T=%.17g (status %d)",
+                  rho, T, ANEOSIsInTable(m, rho, u));
+            P = ANEOSPofRhoU(m, rho, u);
+            CHECK(!ANEOSFailed(P) && m->nLookupFail == nf, "P(rho, u(rho, T)) fell back at rho=%.17g T=%.17g", rho, T);
+            m->nLookupFail = nf;
+        }
+    }
+    CHECK(nStates > 10000, "only %ld states checked", nStates);
+    END_TEST();
+}
+
 int main(int argc, char *argv[])
 {
     int iMat = MAT_ANEOS_DUNITE;
@@ -1573,6 +1618,7 @@ int main(int argc, char *argv[])
     testRhoofPU(m);
     testOptionalTables(m);
     testIsInTable(m);
+    testUofRhoTInTable(m);
     testStrengthFileValidation(m);
     testTableValidation();
     testUnitPair(iMat);
