@@ -50,6 +50,13 @@ the end nodes do not bracket the target:
   the edge and plateau tolerances, before `INTERP_NOT_ATTAINED`. A target
   equal to `f_0` is node 0.
 
+An infinite target is attained by no segment of a finite line: strict mode
+returns `INTERP_ABOVE` for +inf and `INTERP_BELOW` for -inf, tolerant mode
+`INTERP_NOT_ATTAINED`. A NaN target is `INTERP_INVALID` in both. Up to 1.0.3
+the node tolerance of the tolerant mode accepted an infinite target at node 0
+(|inf - f_0| = inf <= nodeTol * inf), so ANEOSmaterial located u = ±inf at
+T_min without a fallback.
+
 Neither mode detects a non-monotonic line (that would cost O(n) per call):
 there it returns a root, which need not be the physical one. The consumers
 report such lines of their tables once at initialisation
@@ -104,7 +111,7 @@ builds and runs `testInterpBilinear`, which needs no table files: it
 checks the arithmetic on synthetic grids (a globally bilinear function
 reproduced to roundoff, inversion round trips in both modes, constructed
 defects producing the documented status codes, the bracket invariant on random
-non-monotonic lines), the edge tolerance band on
+non-monotonic lines, infinite and NaN targets in both modes), the edge tolerance band on
 the kinds of axis the consumers use (a linear axis starting at 1e-25, log
 axes with a bound at 0, a log axis shifted to 0 by a unit conversion), that
 the single-`tol` functions equal the `*Tol` variants with `tolAbs = 0`, and
@@ -144,7 +151,7 @@ unprefixed names in three headers would clash):
 
     #define ANEOS_INTERP_VERSION_MAJOR_REQUIRED 1
     #define ANEOS_INTERP_VERSION_MINOR_REQUIRED 0
-    #define ANEOS_INTERP_VERSION_PATCH_REQUIRED 3
+    #define ANEOS_INTERP_VERSION_PATCH_REQUIRED 4
     #define ANEOS_INTERP_ABI_VERSION 1
     #if (INTERP_VERSION_MAJOR * 10000 + INTERP_VERSION_MINOR * 100 + INTERP_VERSION_PATCH) < \
         (ANEOS_INTERP_VERSION_MAJOR_REQUIRED * 10000 + ANEOS_INTERP_VERSION_MINOR_REQUIRED * 100 + ANEOS_INTERP_VERSION_PATCH_REQUIRED)
@@ -166,8 +173,9 @@ reos3 call the `*Tol` variants) must also raise its required version to that
 release: in EOSlib the copy in effect may be another consumer's, and an older
 copy would otherwise fail with an undeclared function instead of the clear
 version error. New functions without a layout change raise the minor version
-(the `*Tol` variants: 1.1.0) and leave `INTERP_ABI_VERSION` alone. Pull the
-new copy into all three consumers together.
+and leave `INTERP_ABI_VERSION` alone. (The `*Tol` variants came with 1.0.3
+without that bump, so a 1.0.3 copy may lack them; the consumers require 1.0.4,
+which has them.) Pull the new copy into all three consumers together.
 
 ## License
 

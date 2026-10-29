@@ -518,7 +518,10 @@ static void testInvertDefects(void)
  *   - a target equal to f_0 is node 0 in tolerant mode (k = 0, t = 0), also on a non-monotonic line
  *     where the sign bisection would have ended on another root;
  *   - the node tolerance of the tolerant mode covers the last node as well (k = n-2, t = 1), where
- *     a nearly flat last segment makes the edge band too narrow (up to 1.0.3 the scan skipped it).
+ *     a nearly flat last segment makes the edge band too narrow (up to 1.0.3 the scan skipped it);
+ *   - an infinite target is attained by no segment: INTERP_ABOVE/INTERP_BELOW in strict mode,
+ *     INTERP_NOT_ATTAINED in tolerant mode (up to 1.0.3 the node tolerance of the tolerant mode
+ *     accepted it at node 0, since |inf - f_0| = inf <= nodeTol*inf), outputs untouched.
  */
 #define LINE_NMAX 64
 static double lineAxisX[2] = { 0.0, 1.0 }, lineAxisY[LINE_NMAX], lineZ[2 * LINE_NMAX];
@@ -543,7 +546,7 @@ static void testInvertLines(void)
     static const INTERPINVERTOPT tolerant = INTERP_INVERT_TOLERANT;
     int k = 0, r, n;
     double t = 0.0;
-    TEST("inversion: bracket invariant, dips outside the end nodes, f_0");
+    TEST("inversion: bracket invariant, dips outside the end nodes, f_0, inf");
 
     /* A dip below f_0 right after the first node: attained only there. */
     {
@@ -624,6 +627,52 @@ static void testInvertLines(void)
             k = -1; t = -1.0;
             r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, 1.0 - e, &tolerant, &k, &t);
             CHECK(r == INTERP_SUCCESS && k == 0 && t == 0.0, "tolerant: roundoff below the first node (status %d, k=%d, t=%g)", r, k, t);
+        }
+    }
+    /*
+     * Infinite and NaN targets, on increasing and decreasing lines, a non-monotonic line and a line
+     * with a nearly flat last segment (where the node tolerance is the widest band). Strict mode
+     * inverts increasing lines only, so it is checked on those.
+     */
+    {
+        static const double inc[4] = { 1.0, 2.0, 3.0, 4.0 }, dec[4] = { 4.0, 3.0, 2.0, 1.0 };
+        static const double dip[5] = { 1.0, 3.0, 0.5, 2.0, 4.0 }, flat[4] = { 0.5, 0.8, 1.0 - 1e-9, 1.0 };
+        const double *lines[4] = { inc, dec, dip, flat };
+        static const int nLine[4] = { 4, 4, 5, 4 };
+        static const char *name[4] = { "increasing", "decreasing", "non-monotonic", "flat last segment" };
+        int m, s;
+        for (m = 0; m < 4; m++) {
+            INTERPGRID L = makeLine(lines[m], nLine[m]);
+            for (s = -1; s <= 1; s += 2) {
+                const double target = s * INFINITY;
+                k = -7; t = -7.0;
+                r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, target, &tolerant, &k, &t);
+                CHECK(r == INTERP_NOT_ATTAINED && k == -7 && t == -7.0, "tolerant, %s line, target %cinf: status %d, k=%d, t=%g",
+                      name[m], s > 0 ? '+' : '-', r, k, t);
+                if (m == 0 || m == 3) {
+                    k = -7; t = -7.0;
+                    r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, target, &strict, &k, &t);
+                    CHECK(r == (s > 0 ? INTERP_ABOVE : INTERP_BELOW) && k == -7 && t == -7.0, "strict, %s line, target %cinf: status %d",
+                          name[m], s > 0 ? '+' : '-', r);
+                }
+            }
+            k = -7; t = -7.0;
+            r = interpInvertLine(&L, lineZ, INTERP_ALONG_Y, 0, 0.0, NAN, &tolerant, &k, &t);
+            CHECK(r == INTERP_INVALID && k == -7 && t == -7.0, "tolerant, %s line, NaN target: status %d", name[m], r);
+        }
+        /* Through the grid functions, as the consumers call them (T(rho, u), rho(P, T)). */
+        {
+            INTERPCELL c = { -7, -7, -7.0, -7.0 };
+            double v = -7.0;
+            const double x = xAxis[7] * 1.37, y = yAxis[5] * 1.21;
+            CHECK(interpInvertY(&G, zMono, x, INFINITY, 0.0, &tolerant, &c, &v) == INTERP_NOT_ATTAINED, "interpInvertY tolerant, +inf");
+            CHECK(interpInvertY(&G, zMono, x, -INFINITY, 0.0, &tolerant, &c, &v) == INTERP_NOT_ATTAINED, "interpInvertY tolerant, -inf");
+            CHECK(interpInvertX(&G, zMono, y, INFINITY, 0.0, &tolerant, &c, &v) == INTERP_NOT_ATTAINED, "interpInvertX tolerant, +inf");
+            CHECK(interpInvertX(&G, zMono, y, -INFINITY, 0.0, &tolerant, &c, &v) == INTERP_NOT_ATTAINED, "interpInvertX tolerant, -inf");
+            CHECK(interpInvertY(&G, zMono, x, INFINITY, 0.0, &strict, &c, &v) == INTERP_ABOVE, "interpInvertY strict, +inf");
+            CHECK(interpInvertY(&G, zMono, x, -INFINITY, 0.0, &strict, &c, &v) == INTERP_BELOW, "interpInvertY strict, -inf");
+            CHECK(interpInvertX(&G, zMono, y, NAN, 0.0, &tolerant, &c, &v) == INTERP_INVALID, "interpInvertX tolerant, NaN");
+            CHECK(c.ix == -7 && c.iy == -7 && c.u == -7.0 && c.v == -7.0 && v == -7.0, "outputs touched for a non-finite target");
         }
     }
     /*
