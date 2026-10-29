@@ -38,7 +38,10 @@
  *          and T == TAxis[nT-1] are inside) with the roundoff tolerance
  *          ANEOS_EDGE_TOL; the core's status codes are mapped to the ANEOS
  *          contract in ANEOSmaterial.c. Same search strategy and tolerances
- *          as before (INTERP_INVERT_TOLERANT), nothing else in the numerics changed.
+ *          as before (INTERP_INVERT_TOLERANT). Numerical changes (this entry said
+ *          "none" up to 1.2.0): T(rho, u) can differ from 1.0.4 by ~1e-6 relative
+ *          near table nodes, and rho(P, T) and rho(u, T) return the exact root of
+ *          the bilinear interpolant on the row at T, which they did not before.
  *   1.2.0  EOSlib failure contract spelled out: ANEOS_FAIL_VALUE and
  *          ANEOSFailed() replace the literal -1e50, ANEOS_SUCCESS/ANEOS_FAIL
  *          status codes; ANEOSTmeltofRho returns the sentinel for an
@@ -101,6 +104,8 @@
  *          ANEOSReadStrengthParameters rejects (fatal) anything but whitespace or a comment after
  *          the value ("Y0 = 1e8 1e9" was read as Y0 = 1e8); a last line without a newline is
  *          accepted also when it exactly fills the line buffer (it was reported as too long).
+ *          Documentation: the 1.0.5 entry said that nothing else in the numerics changed; it lists
+ *          the changes of T(rho, u), rho(P, T) and rho(u, T) now.
  */
 #define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1
