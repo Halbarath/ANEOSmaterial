@@ -105,6 +105,11 @@
  *          which is far narrower than nodeTol*|g1| where the last segment is nearly flat, so a
  *          target within nodeTol of the last node value but outside the band gave
  *          INTERP_NOT_ATTAINED. Otherwise bit-identical.
+ *          interpInvertLine (tolerant mode): an infinite target gives INTERP_NOT_ATTAINED. The node
+ *          tolerance accepted it at node 0, because |target - f_0| = inf <= nodeTol*inf = inf, so
+ *          ANEOSmaterial located u = +-inf at T_min without a fallback (uncounted, ANEOSIsInTable
+ *          ANEOS_SUCCESS) and rho(P = inf, T) at the first density node. The strict mode already
+ *          returned INTERP_ABOVE/INTERP_BELOW for +-inf.
  */
 #ifndef INTERPBILINEAR_HINCLUDED
 #define INTERPBILINEAR_HINCLUDED
@@ -525,9 +530,10 @@ static inline int interpRelaxedLocate(const INTERPGRID *g, const double *z, int 
  * report such lines of their tables once, at initialisation.
  *
  * Returns INTERP_SUCCESS with *pk, *pt; INTERP_BELOW/INTERP_ABOVE (strict) or
- * INTERP_NOT_ATTAINED (tolerant) if the target is not found; INTERP_INVALID
- * for a NaN target. The bracket invariant needs finite line values, which
- * the libraries guarantee by validating their tables at load.
+ * INTERP_NOT_ATTAINED (tolerant) if the target is not found, also for an
+ * infinite target (+inf above, -inf below the line in strict mode);
+ * INTERP_INVALID for a NaN target. The bracket invariant needs finite line
+ * values, which the libraries guarantee by validating their tables at load.
  */
 static inline int interpInvertLine(const INTERPGRID *g, const double *z, int axis, int fixed, double w,
                                    double target, const INTERPINVERTOPT *opt, int *pk, double *pt)
@@ -566,6 +572,11 @@ static inline int interpInvertLine(const INTERPGRID *g, const double *z, int axi
             else              { hi = mid; fhi = fm; }
         }
     } else {
+        /*
+         * An infinite target is attained by no segment of a finite line. It must not reach the
+         * node tolerance below, where |target - f_k| = inf <= nodeTol*inf = inf would accept it.
+         */
+        if (isinf(target)) return INTERP_NOT_ATTAINED;
         /*
          * The first node itself: the lowest-index root. The sign bisection below
          * needs flo != target and would move away from it (to n-2, then the scan).
