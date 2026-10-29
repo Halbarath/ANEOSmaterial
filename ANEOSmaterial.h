@@ -54,7 +54,7 @@
  *          melt curve finite and >= 0 (SCvH and REOS3 already checked theirs).
  *          An inconsistent unit pair (exactly one of dKpcUnit, dMsolUnit <= 0,
  *          NaN, inf) is fatal; it silently meant cgs. New ANEOSIsInTable,
- *          ANEOSTmin, ANEOSTmax and ANEOSUCold, so that EOSlib no longer reads the axes.
+ *          ANEOSTmin and ANEOSUCold, so that EOSlib no longer reads the axes.
  *          ANEOSUofPT, ANEOSUofRhoP and ANEOSPofUT return ANEOS_FAIL_VALUE when
  *          their intermediate lookup fails (counted once) instead of passing the
  *          sentinel on to a second lookup (counted twice). Requires interpBilinear
@@ -106,15 +106,19 @@
  *          accepted also when it exactly fills the line buffer (it was reported as too long).
  *          Documentation: the 1.0.5 entry said that nothing else in the numerics changed; it lists
  *          the changes of T(rho, u), rho(P, T) and rho(u, T) now.
+ *   1.3.0  New ANEOSTmax, the highest tabulated temperature: EOSlib still read the T axis for the
+ *          yield clamp above the table (the 1.2.0 entry said it no longer read the axes).
  *          An infinite u (or P, or a u that overflows in the code -> cgs conversion) is outside the
  *          table: ANEOSIsInTable reports ANEOS_OUTSIDE_TMAX for +inf and ANEOS_OUTSIDE_TMIN for
  *          -inf, T(rho, u) falls back to T_min (counted), rho(P = inf, T) and rho(u = inf, T) fail.
  *          The node tolerance of the tolerant inversion accepted inf at the first node, so u = +-inf
- *          was found at T_min without a fallback and reported inside (fixed in interpBilinear 1.0.3).
+ *          was found at T_min without a fallback and reported inside (fixed in interpBilinear
+ *          1.0.4, which this version requires). Finite input bit-identical. testANEOSmaterial checks
+ *          that every u(rho, T) is in the table (EOSlib 1.3.0 relies on it in EOSSolveBC).
  */
-#define ANEOS_VERSION_TEXT    "1.2.0"
+#define ANEOS_VERSION_TEXT    "1.3.0"
 #define ANEOS_VERSION_MAJOR   1
-#define ANEOS_VERSION_MINOR   2
+#define ANEOS_VERSION_MINOR   3
 #define ANEOS_VERSION_PATCH   0
 
 /*
@@ -125,7 +129,7 @@
  */
 #define ANEOS_INTERP_VERSION_MAJOR_REQUIRED 1
 #define ANEOS_INTERP_VERSION_MINOR_REQUIRED 0
-#define ANEOS_INTERP_VERSION_PATCH_REQUIRED 3
+#define ANEOS_INTERP_VERSION_PATCH_REQUIRED 4
 #define ANEOS_INTERP_ABI_VERSION 1
 #if (INTERP_VERSION_MAJOR * 10000 + INTERP_VERSION_MINOR * 100 + INTERP_VERSION_PATCH) < \
     (ANEOS_INTERP_VERSION_MAJOR_REQUIRED * 10000 + ANEOS_INTERP_VERSION_MINOR_REQUIRED * 100 + ANEOS_INTERP_VERSION_PATCH_REQUIRED)
