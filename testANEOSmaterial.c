@@ -1417,7 +1417,7 @@ static void testUnitPair(int iMat)
 }
 
 /*
- * The accessors EOSlib uses instead of reading the axes: ANEOSTmin, ANEOSUCold and ANEOSIsInTable.
+ * The accessors EOSlib uses instead of reading the axes: ANEOSTmin, ANEOSTmax, ANEOSUCold and ANEOSIsInTable.
  * The status must agree with the lookups exactly: inside means T(rho, u) inverts without the T_min
  * fallback, outside in rho means the forward lookups fail.
  */
@@ -1427,12 +1427,13 @@ static const INTERPINVERTOPT ANEOSInvertOptForTest = INTERP_INVERT_TOLERANT;
 static void testIsInTable(ANEOSMATERIAL *m)
 {
     int failsBefore = nFails;
-    TEST("ANEOSIsInTable, ANEOSUCold, ANEOSTmin");
+    TEST("ANEOSIsInTable, ANEOSUCold, ANEOSTmin, ANEOSTmax");
     const double rhoMin = m->rhoAxis[0] * m->CGStoCodeUnitsforRho, rhoMax = m->rhoAxis[m->nRho-1] * m->CGStoCodeUnitsforRho;
     const double TMin = m->TAxis[0], TMax = m->TAxis[m->nT-1];
     long nf0 = m->nLookupFail;
 
     CHECK(ANEOSTmin(m) == TMin, "ANEOSTmin");
+    CHECK(ANEOSTmax(m) == TMax, "ANEOSTmax");
     for (int a = 0; a < NSAMPLE_RHO; a += 7) {
         double rho = sampleRho(m, a);
         double uc = ANEOSUCold(m, rho), uTop = ANEOSUofRhoT(m, rho, TMax);

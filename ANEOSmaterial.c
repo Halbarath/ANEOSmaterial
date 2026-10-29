@@ -682,6 +682,14 @@ double ANEOSTmin(ANEOSMATERIAL *material)
 }
 
 /*
+ * The highest tabulated temperature, in K.
+ */
+double ANEOSTmax(ANEOSMATERIAL *material)
+{
+    return material->TAxis[material->nT - 1];
+}
+
+/*
  * The cold curve of the table, u(rho, T_min).
  */
 double ANEOSUCold(ANEOSMATERIAL *material, double rho)

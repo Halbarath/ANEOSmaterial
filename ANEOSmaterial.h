@@ -54,7 +54,7 @@
  *          melt curve finite and >= 0 (SCvH and REOS3 already checked theirs).
  *          An inconsistent unit pair (exactly one of dKpcUnit, dMsolUnit <= 0,
  *          NaN, inf) is fatal; it silently meant cgs. New ANEOSIsInTable,
- *          ANEOSTmin and ANEOSUCold, so that EOSlib no longer reads the axes.
+ *          ANEOSTmin, ANEOSTmax and ANEOSUCold, so that EOSlib no longer reads the axes.
  *          ANEOSUofPT, ANEOSUofRhoP and ANEOSPofUT return ANEOS_FAIL_VALUE when
  *          their intermediate lookup fails (counted once) instead of passing the
  *          sentinel on to a second lookup (counted twice). Requires interpBilinear
@@ -288,6 +288,8 @@ int ANEOSReadStrengthParameters(ANEOSMATERIAL *material, char *inputfile);
 double ANEOSgetRho0(ANEOSMATERIAL *material);
 /* The lowest tabulated temperature (the T(rho, u) fallback), in K. */
 double ANEOSTmin(ANEOSMATERIAL *material);
+/* The highest tabulated temperature (the top row, where EOSlib clamps a state above the table), in K. */
+double ANEOSTmax(ANEOSMATERIAL *material);
 /* u(rho, T_min), the cold curve of the table (code units); ANEOS_FAIL_VALUE (counted) outside the table. */
 double ANEOSUCold(ANEOSMATERIAL *material, double rho);
 /*
