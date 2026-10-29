@@ -1508,7 +1508,35 @@ static void testIsInTable(ANEOSMATERIAL *m)
     CHECK(ANEOSIsInTable(m, 2.0 * rhoMax, 1.0) == ANEOS_OUTSIDE_RHOMAX, "above rhoMax");
     CHECK(ANEOSIsInTable(m, NAN, 1.0) == ANEOS_OUTSIDE_RHOMIN, "NaN rho");
     CHECK(ANEOSIsInTable(m, -1.0, 1.0) == ANEOS_OUTSIDE_RHOMIN, "negative rho");
+    CHECK(ANEOSIsInTable(m, INFINITY, 1.0) == ANEOS_OUTSIDE_RHOMAX, "+inf rho");
+    /*
+     * An infinite u is outside the column: up to the interpBilinear fix the node tolerance of the
+     * tolerant inversion accepted it at the first node (|inf - f_0| <= nodeTol*inf), so it was
+     * reported inside and found at T_min without a fallback.
+     */
+    {
+        const double rho = sampleRho(m, NSAMPLE_RHO / 2);
+        CHECK(ANEOSIsInTable(m, rho, INFINITY) == ANEOS_OUTSIDE_TMAX, "+inf u: %d", ANEOSIsInTable(m, rho, INFINITY));
+        CHECK(ANEOSIsInTable(m, rho, -INFINITY) == ANEOS_OUTSIDE_TMIN, "-inf u: %d", ANEOSIsInTable(m, rho, -INFINITY));
+    }
     CHECK(m->nLookupFail == nf0, "a status query is not a failure (%ld -> %ld)", nf0, m->nLookupFail);
+    {
+        const double rho = sampleRho(m, NSAMPLE_RHO / 2), T = sampleT(m, NSAMPLE_T / 2);
+        const double us[2] = { INFINITY, -INFINITY };
+        for (int q = 0; q < 2; q++) {
+            long nf = m->nLookupFail;
+            double c, Tf, P = ANEOSPCTofRhoU(m, rho, us[q], &c, &Tf);
+            CHECK(Tf == TMin && m->nLookupFail == nf + 1, "PCT at u = %g: T = %g, counted %ld times (T_min fallback)", us[q], Tf, m->nLookupFail - nf);
+            CHECK(P == ANEOSPofRhoT(m, rho, TMin), "PCT at u = %g evaluates at (rho, T_min)", us[q]);
+        }
+        long nf = m->nLookupFail;
+        CHECK(ANEOSRhoofPT(m, INFINITY, T) == ANEOS_FAIL_VALUE, "rho(P = +inf, T)");
+        CHECK(ANEOSRhoofPT(m, -INFINITY, T) == ANEOS_FAIL_VALUE, "rho(P = -inf, T)");
+        CHECK(ANEOSRhoofUT(m, INFINITY, T) == ANEOS_FAIL_VALUE, "rho(u = +inf, T)");
+        CHECK(ANEOSTofRhoP(m, rho, INFINITY) == ANEOS_FAIL_VALUE, "T(rho, P = +inf)");
+        CHECK(m->nLookupFail == nf + 4, "infinite targets counted %ld times (expected 4)", m->nLookupFail - nf);
+    }
+    m->nLookupFail = nf0;
     /* UCold outside the table: the sentinel, counted. */
     CHECK(ANEOSUCold(m, 2.0 * rhoMax) == ANEOS_FAIL_VALUE, "UCold above rhoMax");
     CHECK(m->nLookupFail == nf0 + 1, "UCold failure counted (%ld -> %ld)", nf0, m->nLookupFail);

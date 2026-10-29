@@ -106,6 +106,11 @@
  *          accepted also when it exactly fills the line buffer (it was reported as too long).
  *          Documentation: the 1.0.5 entry said that nothing else in the numerics changed; it lists
  *          the changes of T(rho, u), rho(P, T) and rho(u, T) now.
+ *          An infinite u (or P, or a u that overflows in the code -> cgs conversion) is outside the
+ *          table: ANEOSIsInTable reports ANEOS_OUTSIDE_TMAX for +inf and ANEOS_OUTSIDE_TMIN for
+ *          -inf, T(rho, u) falls back to T_min (counted), rho(P = inf, T) and rho(u = inf, T) fail.
+ *          The node tolerance of the tolerant inversion accepted inf at the first node, so u = +-inf
+ *          was found at T_min without a fallback and reported inside (fixed in interpBilinear 1.0.3).
  */
 #define ANEOS_VERSION_TEXT    "1.2.0"
 #define ANEOS_VERSION_MAJOR   1
@@ -289,8 +294,8 @@ double ANEOSUCold(ANEOSMATERIAL *material, double rho);
  * Table status of (rho, u) (code units), exactly as the (rho, u) lookups see the
  * state: ANEOS_SUCCESS if T(rho, u) is found without the T_min fallback (the same
  * edge tolerance and the same tolerant inversion), otherwise ANEOS_OUTSIDE_RHOMIN
- * (also for a NaN rho), _RHOMAX, _TMIN (u below the u(T) column at rho, also NaN)
- * or _TMAX (u above it). On a column with du/dT < 0 at the cold rows a u below
+ * (also for a NaN rho), _RHOMAX (also +inf), _TMIN (u below the u(T) column at rho,
+ * also NaN and -inf) or _TMAX (u above it, also +inf). On a column with du/dT < 0 at the cold rows a u below
  * u(rho, T_min) can be inside. A status query, not a failure: nothing is counted.
  */
 int ANEOSIsInTable(ANEOSMATERIAL *material, double rho, double u);
