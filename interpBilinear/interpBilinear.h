@@ -105,11 +105,16 @@
  *          which is far narrower than nodeTol*|g1| where the last segment is nearly flat, so a
  *          target within nodeTol of the last node value but outside the band gave
  *          INTERP_NOT_ATTAINED. Otherwise bit-identical.
- *          interpInvertLine (tolerant mode): an infinite target gives INTERP_NOT_ATTAINED. The node
+ *   1.0.4  interpInvertLine (tolerant mode): an infinite target gives INTERP_NOT_ATTAINED. The node
  *          tolerance accepted it at node 0, because |target - f_0| = inf <= nodeTol*inf = inf, so
  *          ANEOSmaterial located u = +-inf at T_min without a fallback (uncounted, ANEOSIsInTable
  *          ANEOS_SUCCESS) and rho(P = inf, T) at the first density node. The strict mode already
- *          returned INTERP_ABOVE/INTERP_BELOW for +-inf.
+ *          returned INTERP_ABOVE/INTERP_BELOW for +-inf. Finite targets bit-identical; the types and
+ *          INTERP_ABI_VERSION are unchanged. testInterpBilinear checks infinite and NaN targets in
+ *          both modes.
+ *          The *Tol variants came with 1.0.3 without the version bump announced there (1.1.0), so
+ *          a 1.0.3 copy may lack them: ANEOSmaterial, scvheos and reos3 require 1.0.4, which has
+ *          them for certain (and ANEOSmaterial needs the fix above). Pull it into all three.
  */
 #ifndef INTERPBILINEAR_HINCLUDED
 #define INTERPBILINEAR_HINCLUDED
@@ -117,10 +122,10 @@
 #include <math.h>
 #include <stddef.h>
 
-#define INTERP_VERSION_TEXT   "1.0.3"
+#define INTERP_VERSION_TEXT   "1.0.4"
 #define INTERP_VERSION_MAJOR  1
 #define INTERP_VERSION_MINOR  0
-#define INTERP_VERSION_PATCH  3
+#define INTERP_VERSION_PATCH  4
 
 /*
  * Layout version of the public types INTERPGRID, INTERPCELL and INTERPINVERTOPT. Bump it whenever
