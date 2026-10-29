@@ -1596,7 +1596,7 @@ int main(int argc, char *argv[])
 {
     int iMat = MAT_ANEOS_DUNITE;
     double dKpcUnit = 2.06701e-13;   /* Earth radius */
-    double dMsolUnit = 4.80438e-08;  /* Earth mass */
+    double dMsolUnit = 4.80438e-08;  /* 9.56e25 g, not the Earth mass: density unit 0.3685 g/cc (pkdgrav3 units) */
 
     if (argc > 1) iMat = atoi(argv[1]);
     if (argc > 3) { dKpcUnit = atof(argv[2]); dMsolUnit = atof(argv[3]); }
